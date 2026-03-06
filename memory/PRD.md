@@ -30,10 +30,16 @@
 - [x] Store location details (address, survey number, taluka, district)
 - [x] Store professional details (architect, engineer, CA, auditor)
 
-### Buildings/Wings Management
+### Buildings/Wings Management (Enhanced - March 2026)
 - [x] Add buildings/towers per project
 - [x] Track floors, units, estimated cost per building
 - [x] Completion certificate tracking
+- [x] Building Type Selection (Residential Tower, Mixed Tower, Row House, Bungalow)
+- [x] Parking Configuration (Basement, Stilt/Ground, Upper Level floors)
+- [x] Floor Configuration (Commercial floors, Residential floors, Apartments per floor)
+- [x] Auto-calculation of total floors and units based on building type
+- [x] Bulk Add feature - create multiple buildings with same configuration
+- [x] Enhanced table display with Type, Parking (B/S/U), Floors columns
 
 ### Construction Progress (Form-1)
 - [x] 16 default construction activities with weightages
@@ -69,13 +75,15 @@
 - [x] RERA deposit calculation
 - [x] Quick action buttons
 
-## What's Been Implemented (January 2026)
+## What's Been Implemented (January 2026 - March 2026)
 
 ### Backend (FastAPI + MongoDB)
 - ✅ Complete REST API for all modules
 - ✅ JWT authentication with bcrypt password hashing
 - ✅ Project CRUD endpoints
-- ✅ Building CRUD endpoints
+- ✅ Building CRUD endpoints with enhanced fields (building type, parking config, floor config)
+- ✅ Bulk building creation endpoint (POST /api/buildings/bulk)
+- ✅ Building types configuration endpoint (GET /api/buildings/types)
 - ✅ Construction progress endpoints with weighted calculation
 - ✅ Project cost endpoints with automatic totals
 - ✅ Building cost endpoints
@@ -92,7 +100,12 @@
 - ✅ Responsive sidebar navigation
 - ✅ Dashboard with metrics cards
 - ✅ Projects list and form pages
-- ✅ Buildings management page
+- ✅ **Enhanced Buildings management page** (March 2026)
+  - Building type selector (Residential Tower, Mixed Tower, Row House, Bungalow)
+  - Parking configuration (Basement, Stilt/Ground, Upper Level)
+  - Floor configuration (Commercial, Residential, Apartments per floor)
+  - Bulk Add dialog for multiple buildings
+  - Enhanced table with Type, Parking, Floors columns
 - ✅ Construction progress tracking page
 - ✅ Project costs management page
 - ✅ Sales & receivables page with table
