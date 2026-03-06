@@ -1078,23 +1078,39 @@ const ProjectFormPage = () => {
   );
 };
 
-// Buildings Page
+// Buildings Page - Enhanced with building types, floor configurations, and bulk creation
 const BuildingsPage = () => {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState("");
   const [buildings, setBuildings] = useState([]);
+  const [buildingTypes, setBuildingTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState(null);
-  const [form, setForm] = useState({
+  const [saving, setSaving] = useState(false);
+  
+  const defaultForm = {
     building_name: "",
-    floors: 0,
-    units: 0,
+    building_type: "residential_tower",
+    parking_basement: 0,
+    parking_stilt_ground: 0,
+    parking_upper_level: 0,
+    commercial_floors: 0,
+    residential_floors: 0,
+    apartments_per_floor: 0,
     estimated_cost: 0
+  };
+  
+  const [form, setForm] = useState(defaultForm);
+  const [bulkForm, setBulkForm] = useState({
+    building_names: "",
+    ...defaultForm
   });
 
   useEffect(() => {
     fetchProjects();
+    fetchBuildingTypes();
   }, []);
 
   useEffect(() => {
@@ -1117,6 +1133,15 @@ const BuildingsPage = () => {
     }
   };
 
+  const fetchBuildingTypes = async () => {
+    try {
+      const res = await axios.get(`${API}/buildings/types`);
+      setBuildingTypes(res.data.types || []);
+    } catch (err) {
+      console.error("Failed to load building types");
+    }
+  };
+
   const fetchBuildings = async () => {
     try {
       const res = await axios.get(`${API}/buildings?project_id=${selectedProject}`);
@@ -1126,7 +1151,16 @@ const BuildingsPage = () => {
     }
   };
 
+  const getTypeConfig = (typeValue) => {
+    return buildingTypes.find(t => t.value === typeValue) || {};
+  };
+
   const handleSubmit = async () => {
+    if (!form.building_name.trim()) {
+      toast.error("Building name is required");
+      return;
+    }
+    setSaving(true);
     try {
       if (editingBuilding) {
         await axios.put(`${API}/buildings/${editingBuilding.building_id}`, form);
@@ -1137,10 +1171,39 @@ const BuildingsPage = () => {
       }
       setDialogOpen(false);
       setEditingBuilding(null);
-      setForm({ building_name: "", floors: 0, units: 0, estimated_cost: 0 });
+      setForm(defaultForm);
       fetchBuildings();
     } catch (err) {
-      toast.error("Failed to save building");
+      toast.error(err.response?.data?.detail || "Failed to save building");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBulkSubmit = async () => {
+    const names = bulkForm.building_names.split('\n').map(n => n.trim()).filter(n => n);
+    if (names.length === 0) {
+      toast.error("Enter at least one building name");
+      return;
+    }
+    setSaving(true);
+    try {
+      const template = { ...bulkForm };
+      delete template.building_names;
+      
+      const res = await axios.post(`${API}/buildings/bulk`, {
+        project_id: selectedProject,
+        building_names: names,
+        template
+      });
+      toast.success(`Created ${res.data.created} buildings`);
+      setBulkDialogOpen(false);
+      setBulkForm({ building_names: "", ...defaultForm });
+      fetchBuildings();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to create buildings");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1148,9 +1211,14 @@ const BuildingsPage = () => {
     setEditingBuilding(building);
     setForm({
       building_name: building.building_name,
-      floors: building.floors,
-      units: building.units,
-      estimated_cost: building.estimated_cost
+      building_type: building.building_type || "residential_tower",
+      parking_basement: building.parking_basement || 0,
+      parking_stilt_ground: building.parking_stilt_ground || 0,
+      parking_upper_level: building.parking_upper_level || 0,
+      commercial_floors: building.commercial_floors || 0,
+      residential_floors: building.residential_floors || 0,
+      apartments_per_floor: building.apartments_per_floor || 0,
+      estimated_cost: building.estimated_cost || 0
     });
     setDialogOpen(true);
   };
@@ -1166,17 +1234,166 @@ const BuildingsPage = () => {
     }
   };
 
+  const getBuildingTypeLabel = (typeValue) => {
+    const type = buildingTypes.find(t => t.value === typeValue);
+    return type?.label || typeValue;
+  };
+
+  // Render form fields based on building type
+  const renderFormFields = (formData, setFormData, isBulk = false) => {
+    const typeConfig = getTypeConfig(formData.building_type);
+    
+    return (
+      <div className="space-y-4">
+        {!isBulk && (
+          <div>
+            <Label className="form-label">Building Name *</Label>
+            <Input
+              value={formData.building_name}
+              onChange={(e) => setFormData(f => ({ ...f, building_name: e.target.value }))}
+              placeholder="e.g., Tower A, Wing E-01"
+              data-testid="building-name-input"
+            />
+          </div>
+        )}
+        
+        {isBulk && (
+          <div>
+            <Label className="form-label">Building Names (one per line) *</Label>
+            <Textarea
+              value={formData.building_names}
+              onChange={(e) => setFormData(f => ({ ...f, building_names: e.target.value }))}
+              placeholder="Tower A&#10;Tower B&#10;Tower C"
+              rows={4}
+              data-testid="bulk-building-names-input"
+            />
+            <p className="text-xs text-slate-500 mt-1">Enter each building name on a new line</p>
+          </div>
+        )}
+
+        <div>
+          <Label className="form-label">Building Type *</Label>
+          <Select 
+            value={formData.building_type} 
+            onValueChange={(v) => setFormData(f => ({ ...f, building_type: v, commercial_floors: 0 }))}
+          >
+            <SelectTrigger data-testid="building-type-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {buildingTypes.map(type => (
+                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+        
+        <div>
+          <Label className="form-label text-slate-700 font-semibold">Parking Configuration</Label>
+          <div className="grid grid-cols-3 gap-3 mt-2">
+            <div>
+              <Label className="text-xs text-slate-500">Basement</Label>
+              <Input
+                type="number"
+                min="0"
+                value={formData.parking_basement}
+                onChange={(e) => setFormData(f => ({ ...f, parking_basement: parseInt(e.target.value) || 0 }))}
+                data-testid="parking-basement-input"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-500">Stilt/Ground</Label>
+              <Input
+                type="number"
+                min="0"
+                value={formData.parking_stilt_ground}
+                onChange={(e) => setFormData(f => ({ ...f, parking_stilt_ground: parseInt(e.target.value) || 0 }))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-500">Upper Level</Label>
+              <Input
+                type="number"
+                min="0"
+                value={formData.parking_upper_level}
+                onChange={(e) => setFormData(f => ({ ...f, parking_upper_level: parseInt(e.target.value) || 0 }))}
+              />
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div>
+          <Label className="form-label text-slate-700 font-semibold">Floor Configuration</Label>
+          <div className="grid grid-cols-2 gap-4 mt-2">
+            {typeConfig.has_commercial && (
+              <div>
+                <Label className="text-xs text-slate-500">Commercial Floors</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.commercial_floors}
+                  onChange={(e) => setFormData(f => ({ ...f, commercial_floors: parseInt(e.target.value) || 0 }))}
+                  data-testid="commercial-floors-input"
+                />
+              </div>
+            )}
+            <div className={typeConfig.has_commercial ? "" : "col-span-2"}>
+              <Label className="text-xs text-slate-500">Residential Floors</Label>
+              <Input
+                type="number"
+                min="0"
+                value={formData.residential_floors}
+                onChange={(e) => setFormData(f => ({ ...f, residential_floors: parseInt(e.target.value) || 0 }))}
+                data-testid="residential-floors-input"
+              />
+            </div>
+          </div>
+        </div>
+
+        {typeConfig.has_apartments_per_floor && (
+          <div>
+            <Label className="form-label">Apartments per Floor</Label>
+            <Input
+              type="number"
+              min="0"
+              value={formData.apartments_per_floor}
+              onChange={(e) => setFormData(f => ({ ...f, apartments_per_floor: parseInt(e.target.value) || 0 }))}
+              data-testid="apartments-per-floor-input"
+            />
+          </div>
+        )}
+
+        <Separator />
+
+        <div>
+          <Label className="form-label">Estimated Cost (₹)</Label>
+          <Input
+            type="number"
+            min="0"
+            value={formData.estimated_cost}
+            onChange={(e) => setFormData(f => ({ ...f, estimated_cost: parseFloat(e.target.value) || 0 }))}
+            data-testid="estimated-cost-input"
+          />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Layout>
       <div className="space-y-6" data-testid="buildings-page">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 font-heading">Buildings / Wings</h1>
-            <p className="text-slate-600">Manage project buildings and towers</p>
+            <p className="text-slate-600">Manage project buildings with detailed floor configurations</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Select value={selectedProject} onValueChange={setSelectedProject}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48" data-testid="project-select">
                 <SelectValue placeholder="Select project" />
               </SelectTrigger>
               <SelectContent>
@@ -1185,13 +1402,45 @@ const BuildingsPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Bulk Add Dialog */}
+            <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="outline"
+                  onClick={() => setBulkForm({ building_names: "", ...defaultForm })}
+                  data-testid="bulk-add-btn"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Bulk Add
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Bulk Add Buildings</DialogTitle>
+                  <DialogDescription>Create multiple buildings with the same configuration</DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] pr-4">
+                  {renderFormFields(bulkForm, setBulkForm, true)}
+                </ScrollArea>
+                <DialogFooter className="mt-4">
+                  <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleBulkSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={saving} data-testid="bulk-save-btn">
+                    {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Create Buildings
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            
+            {/* Single Add Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button 
                   className="bg-blue-600 hover:bg-blue-700"
                   onClick={() => {
                     setEditingBuilding(null);
-                    setForm({ building_name: "", floors: 0, units: 0, estimated_cost: 0 });
+                    setForm(defaultForm);
                   }}
                   data-testid="add-building-btn"
                 >
@@ -1199,51 +1448,19 @@ const BuildingsPage = () => {
                   Add Building
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingBuilding ? "Edit" : "Add"} Building</DialogTitle>
+                  <DialogDescription>Configure building type and floor details</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label className="form-label">Building Name</Label>
-                    <Input
-                      value={form.building_name}
-                      onChange={(e) => setForm(f => ({ ...f, building_name: e.target.value }))}
-                      placeholder="e.g., Tower A, Wing E-01"
-                      data-testid="building-name-input"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="form-label">Floors</Label>
-                      <Input
-                        type="number"
-                        value={form.floors}
-                        onChange={(e) => setForm(f => ({ ...f, floors: parseInt(e.target.value) || 0 }))}
-                      />
-                    </div>
-                    <div>
-                      <Label className="form-label">Units</Label>
-                      <Input
-                        type="number"
-                        value={form.units}
-                        onChange={(e) => setForm(f => ({ ...f, units: parseInt(e.target.value) || 0 }))}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="form-label">Estimated Cost (₹)</Label>
-                    <Input
-                      type="number"
-                      value={form.estimated_cost}
-                      onChange={(e) => setForm(f => ({ ...f, estimated_cost: parseFloat(e.target.value) || 0 }))}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
+                <ScrollArea className="max-h-[60vh] pr-4">
+                  {renderFormFields(form, setForm, false)}
+                </ScrollArea>
+                <DialogFooter className="mt-4">
                   <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700" data-testid="save-building-btn">
-                    Save Building
+                  <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={saving} data-testid="save-building-btn">
+                    {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    {editingBuilding ? "Update" : "Create"} Building
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -1258,39 +1475,61 @@ const BuildingsPage = () => {
         ) : buildings.length === 0 ? (
           <Card className="text-center py-12">
             <Building className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-600">No buildings added yet. Click "Add Building" to create one.</p>
+            <p className="text-slate-600 mb-2">No buildings added yet.</p>
+            <p className="text-sm text-slate-500">Click "Add Building" or "Bulk Add" to create buildings.</p>
           </Card>
         ) : (
           <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Building Name</TableHead>
-                  <TableHead className="text-center">Floors</TableHead>
-                  <TableHead className="text-center">Units</TableHead>
-                  <TableHead className="text-right">Estimated Cost</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {buildings.map((b) => (
-                  <TableRow key={b.building_id}>
-                    <TableCell className="font-medium">{b.building_name}</TableCell>
-                    <TableCell className="text-center">{b.floors}</TableCell>
-                    <TableCell className="text-center">{b.units}</TableCell>
-                    <TableCell className="text-right currency">{formatCurrency(b.estimated_cost)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(b)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteBuilding(b.building_id)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Building Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-center">Parking</TableHead>
+                    <TableHead className="text-center">Floors</TableHead>
+                    <TableHead className="text-center">Units</TableHead>
+                    <TableHead className="text-right">Est. Cost</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {buildings.map((b) => (
+                    <TableRow key={b.building_id} data-testid={`building-row-${b.building_id}`}>
+                      <TableCell className="font-medium">{b.building_name}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-xs">
+                          {getBuildingTypeLabel(b.building_type).split(' ').slice(0, 2).join(' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-sm" title="Basement / Stilt / Upper">
+                          {b.parking_basement || 0}/{b.parking_stilt_ground || 0}/{b.parking_upper_level || 0}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-sm">
+                          {b.building_type === "mixed_tower" 
+                            ? `${b.commercial_floors || 0}C + ${b.residential_floors || 0}R`
+                            : b.residential_floors || b.floors || 0
+                          }
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">{b.units || 0}</TableCell>
+                      <TableCell className="text-right currency">{formatCurrency(b.estimated_cost)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(b)} data-testid={`edit-building-${b.building_id}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteBuilding(b.building_id)} data-testid={`delete-building-${b.building_id}`}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </Card>
         )}
       </div>

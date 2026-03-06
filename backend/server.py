@@ -104,11 +104,32 @@ class ProjectResponse(ProjectBase):
     created_at: str
     updated_at: str
 
+class ParkingFloors(BaseModel):
+    basement: int = 0
+    stilt_ground: int = 0
+    upper_level: int = 0
+
 class BuildingBase(BaseModel):
     building_name: str
-    floors: int = 0
-    units: int = 0
+    building_type: str = "residential_tower"  # residential_tower, mixed_tower, row_house, bungalow
+    
+    # Parking floors configuration
+    parking_basement: int = 0
+    parking_stilt_ground: int = 0
+    parking_upper_level: int = 0
+    
+    # Floor configuration for Towers
+    commercial_floors: int = 0  # Only for mixed_tower
+    residential_floors: int = 0
+    apartments_per_floor: int = 0  # Only for towers
+    
+    # Legacy fields (calculated)
+    floors: int = 0  # Total floors (auto-calculated)
+    units: int = 0   # Total units (auto-calculated)
+    
     estimated_cost: float = 0
+    
+    # Completion details (for Form-2)
     completion_cert_number: Optional[str] = None
     completion_cert_date: Optional[str] = None
     occupancy_cert_number: Optional[str] = None
@@ -121,11 +142,17 @@ class BuildingBase(BaseModel):
 class BuildingCreate(BuildingBase):
     project_id: str
 
+class BuildingBulkCreate(BaseModel):
+    project_id: str
+    building_names: List[str]  # List of building names to create
+    template: BuildingBase  # Template with all configuration
+
 class BuildingResponse(BuildingBase):
     model_config = ConfigDict(extra="ignore")
     building_id: str
     project_id: str
     created_at: str
+    total_parking_floors: int = 0
 
 class ConstructionActivityBase(BaseModel):
     activity_name: str
@@ -429,28 +456,143 @@ async def delete_project(project_id: str, current_user: dict = Depends(get_curre
 # BUILDING ROUTES
 # =========================
 
+def calculate_building_totals(building_data: dict) -> dict:
+    """Calculate total floors and units based on building type and configuration"""
+    building_type = building_data.get("building_type", "residential_tower")
+    
+    # Calculate total parking floors
+    total_parking = (
+        building_data.get("parking_basement", 0) +
+        building_data.get("parking_stilt_ground", 0) +
+        building_data.get("parking_upper_level", 0)
+    )
+    
+    # Calculate total floors based on building type
+    if building_type in ["residential_tower", "mixed_tower"]:
+        commercial = building_data.get("commercial_floors", 0) if building_type == "mixed_tower" else 0
+        residential = building_data.get("residential_floors", 0)
+        apartments_per_floor = building_data.get("apartments_per_floor", 0)
+        
+        total_floors = total_parking + commercial + residential
+        total_units = residential * apartments_per_floor
+    else:  # row_house or bungalow
+        residential = building_data.get("residential_floors", 0)
+        total_floors = total_parking + residential
+        total_units = 1  # Each row house/bungalow is 1 unit
+    
+    building_data["floors"] = total_floors
+    building_data["units"] = total_units
+    building_data["total_parking_floors"] = total_parking
+    
+    return building_data
+
 @api_router.post("/buildings", response_model=BuildingResponse)
 async def create_building(building: BuildingCreate, current_user: dict = Depends(get_current_user)):
     building_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    
+    building_data = building.model_dump()
+    building_data = calculate_building_totals(building_data)
+    
     building_doc = {
         "building_id": building_id,
-        **building.model_dump(),
+        **building_data,
         "created_at": now
     }
     await db.buildings.insert_one(building_doc)
     return BuildingResponse(**{k: v for k, v in building_doc.items() if k != "_id"})
 
+@api_router.post("/buildings/bulk", response_model=Dict[str, Any])
+async def create_buildings_bulk(bulk_data: BuildingBulkCreate, current_user: dict = Depends(get_current_user)):
+    """Create multiple buildings with the same configuration but different names"""
+    created = []
+    errors = []
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get template data and calculate totals
+    template_data = bulk_data.template.model_dump()
+    template_data = calculate_building_totals(template_data)
+    
+    for idx, name in enumerate(bulk_data.building_names):
+        try:
+            building_id = str(uuid.uuid4())
+            building_doc = {
+                "building_id": building_id,
+                "project_id": bulk_data.project_id,
+                **template_data,
+                "building_name": name.strip(),
+                "created_at": now
+            }
+            await db.buildings.insert_one(building_doc)
+            created.append({"building_id": building_id, "building_name": name})
+        except Exception as e:
+            errors.append({"name": name, "error": str(e)})
+    
+    return {
+        "created": len(created),
+        "buildings": created,
+        "errors": errors
+    }
+
+@api_router.get("/buildings/types")
+async def get_building_types():
+    """Get available building types with their configurations"""
+    return {
+        "types": [
+            {
+                "value": "residential_tower",
+                "label": "Multi-storey Residential Apartment Tower",
+                "has_commercial": False,
+                "has_apartments_per_floor": True,
+                "is_single_unit": False
+            },
+            {
+                "value": "mixed_tower",
+                "label": "Multi-storey Mixed (Commercial & Residential) Tower",
+                "has_commercial": True,
+                "has_apartments_per_floor": True,
+                "is_single_unit": False
+            },
+            {
+                "value": "row_house",
+                "label": "Row House",
+                "has_commercial": False,
+                "has_apartments_per_floor": False,
+                "is_single_unit": True
+            },
+            {
+                "value": "bungalow",
+                "label": "Bungalow",
+                "has_commercial": False,
+                "has_apartments_per_floor": False,
+                "is_single_unit": True
+            }
+        ],
+        "parking_options": [
+            {"field": "parking_basement", "label": "Basement Parking Floors"},
+            {"field": "parking_stilt_ground", "label": "Stilt/Ground Parking Floors"},
+            {"field": "parking_upper_level", "label": "Upper Level Parking Floors"}
+        ]
+    }
+
 @api_router.get("/buildings", response_model=List[BuildingResponse])
 async def get_buildings(project_id: str = Query(...), current_user: dict = Depends(get_current_user)):
     buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
-    return [BuildingResponse(**b) for b in buildings]
+    result = []
+    for b in buildings:
+        # Ensure backward compatibility - calculate totals if missing
+        if "total_parking_floors" not in b:
+            b = calculate_building_totals(b)
+        result.append(BuildingResponse(**b))
+    return result
 
 @api_router.get("/buildings/{building_id}", response_model=BuildingResponse)
 async def get_building(building_id: str, current_user: dict = Depends(get_current_user)):
     building = await db.buildings.find_one({"building_id": building_id}, {"_id": 0})
     if not building:
         raise HTTPException(status_code=404, detail="Building not found")
+    if "total_parking_floors" not in building:
+        building = calculate_building_totals(building)
     return BuildingResponse(**building)
 
 @api_router.put("/buildings/{building_id}", response_model=BuildingResponse)
@@ -459,7 +601,10 @@ async def update_building(building_id: str, building: BuildingBase, current_user
     if not existing:
         raise HTTPException(status_code=404, detail="Building not found")
     
-    await db.buildings.update_one({"building_id": building_id}, {"$set": building.model_dump()})
+    building_data = building.model_dump()
+    building_data = calculate_building_totals(building_data)
+    
+    await db.buildings.update_one({"building_id": building_id}, {"$set": building_data})
     updated = await db.buildings.find_one({"building_id": building_id}, {"_id": 0})
     return BuildingResponse(**updated)
 
