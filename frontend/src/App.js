@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -618,6 +619,8 @@ const DashboardPage = () => {
 const ProjectsPage = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -635,14 +638,22 @@ const ProjectsPage = () => {
     }
   };
 
-  const deleteProject = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this project?")) return;
+  const handleDeleteClick = (project) => {
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!projectToDelete) return;
     try {
-      await axios.delete(`${API}/projects/${id}`);
+      await axios.delete(`${API}/projects/${projectToDelete.project_id}`);
       toast.success("Project deleted");
       fetchProjects();
     } catch (err) {
       toast.error("Failed to delete project");
+    } finally {
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
     }
   };
 
@@ -714,7 +725,7 @@ const ProjectsPage = () => {
                       <Button 
                         variant="ghost" 
                         size="icon"
-                        onClick={() => deleteProject(project.project_id)}
+                        onClick={() => handleDeleteClick(project)}
                         data-testid={`delete-project-${project.project_id}`}
                       >
                         <Trash2 className="h-4 w-4 text-red-500" />
@@ -727,6 +738,24 @@ const ProjectsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{projectToDelete?.project_name}"? This will also delete all buildings, costs, and sales data associated with this project. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };
@@ -1089,6 +1118,8 @@ const BuildingsPage = () => {
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [buildingToDelete, setBuildingToDelete] = useState(null);
   
   const defaultForm = {
     building_name: "",
@@ -1223,14 +1254,22 @@ const BuildingsPage = () => {
     setDialogOpen(true);
   };
 
-  const deleteBuilding = async (id) => {
-    if (!window.confirm("Delete this building?")) return;
+  const deleteBuilding = async (building) => {
+    setBuildingToDelete(building);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteBuilding = async () => {
+    if (!buildingToDelete) return;
     try {
-      await axios.delete(`${API}/buildings/${id}`);
+      await axios.delete(`${API}/buildings/${buildingToDelete.building_id}`);
       toast.success("Building deleted");
       fetchBuildings();
     } catch (err) {
       toast.error("Failed to delete building");
+    } finally {
+      setDeleteDialogOpen(false);
+      setBuildingToDelete(null);
     }
   };
 
@@ -1521,7 +1560,7 @@ const BuildingsPage = () => {
                         <Button variant="ghost" size="icon" onClick={() => openEdit(b)} data-testid={`edit-building-${b.building_id}`}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteBuilding(b.building_id)} data-testid={`delete-building-${b.building_id}`}>
+                        <Button variant="ghost" size="icon" onClick={() => deleteBuilding(b)} data-testid={`delete-building-${b.building_id}`}>
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </TableCell>
@@ -1533,6 +1572,24 @@ const BuildingsPage = () => {
           </Card>
         )}
       </div>
+
+      {/* Delete Building Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Building</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{buildingToDelete?.building_name}"? This will also delete all construction progress and cost data associated with this building. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteBuilding} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };
