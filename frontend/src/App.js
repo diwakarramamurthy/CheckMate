@@ -282,6 +282,8 @@ const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    // Small delay to ensure state updates properly
+    await new Promise(resolve => setTimeout(resolve, 100));
     try {
       if (isRegister) {
         await register({ email, password, name, role });
