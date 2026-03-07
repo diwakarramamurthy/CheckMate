@@ -3410,11 +3410,6 @@ const ReportsPage = () => {
         { responseType: 'blob' }
       );
       
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href = url;
-      
       // Get filename from header or generate one
       const contentDisposition = response.headers['content-disposition'];
       let filename = `${reportType}_report.pdf`;
@@ -3423,13 +3418,43 @@ const ReportsPage = () => {
         if (filenameMatch) filename = filenameMatch[1];
       }
       
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      
+      // Try to use File System Access API for "Save As" dialog
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+              description: 'PDF Files',
+              accept: { 'application/pdf': ['.pdf'] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          toast.success("PDF saved successfully");
+          return;
+        } catch (err) {
+          // User cancelled the save dialog
+          if (err.name === 'AbortError') {
+            return;
+          }
+          // Fall through to default download
+        }
+      }
+      
+      // Fallback: Auto-download to default location
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      toast.success("PDF downloaded successfully");
+      toast.success("PDF downloaded to your Downloads folder");
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Failed to generate PDF";
       toast.error(errorMsg);
@@ -3642,8 +3667,36 @@ const ImportPage = () => {
         responseType: 'blob'
       });
       
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      
+      // Try to use File System Access API for "Save As" dialog
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'sales_template.xlsx',
+            types: [{
+              description: 'Excel Files',
+              accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          toast.success("Template saved successfully");
+          return;
+        } catch (err) {
+          // User cancelled the save dialog
+          if (err.name === 'AbortError') {
+            return;
+          }
+          // Fall through to default download
+        }
+      }
+      
+      // Fallback: Auto-download to default location
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'sales_template.xlsx');
@@ -3652,7 +3705,7 @@ const ImportPage = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      toast.success("Template downloaded successfully");
+      toast.success("Template downloaded to your Downloads folder");
     } catch (err) {
       toast.error("Failed to download template");
       console.error(err);
