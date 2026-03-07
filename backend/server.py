@@ -374,6 +374,8 @@ class ConstructionProgressResponse(ConstructionProgressBase):
     # Calculated fields
     tower_completion_percentage: float = 0
     category_completions: Dict[str, float] = {}
+    # Detailed tower activities data
+    tower_activities: Optional[Dict] = None
 
 # Project-level Infrastructure Works Progress
 class InfrastructureProgressBase(BaseModel):
