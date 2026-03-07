@@ -3,6 +3,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from "react-router-dom";
 import axios from "axios";
 import { Toaster, toast } from "sonner";
+import { saveAs } from "file-saver";
 import { 
   Building2, LayoutDashboard, FolderKanban, FileText, Upload, Settings, 
   LogOut, Menu, X, ChevronRight, Plus, Pencil, Trash2, Download,
@@ -3405,6 +3406,7 @@ const ReportsPage = () => {
     }
     setDownloading(reportType);
     try {
+      toast.info("Generating PDF...");
       const response = await axios.get(
         `${API}/generate-pdf/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`,
         { responseType: 'blob' }
@@ -3415,28 +3417,12 @@ const ReportsPage = () => {
       let filename = `${reportType}_report.pdf`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename=(.+)/);
-        if (filenameMatch) filename = filenameMatch[1];
+        if (filenameMatch) filename = filenameMatch[1].replace(/"/g, '');
       }
       
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      
-      // Create a temporary URL and trigger download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      
-      // Append to body, click, and remove
-      document.body.appendChild(link);
-      link.click();
-      
-      // Cleanup after a short delay
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-      
-      toast.success("PDF download started - check your Downloads folder");
+      // Use file-saver for reliable download
+      saveAs(response.data, filename);
+      toast.success("PDF downloaded successfully!");
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Failed to generate PDF";
       toast.error(errorMsg);
@@ -3717,17 +3703,18 @@ const ImportPage = () => {
             <div className="flex gap-3 items-center">
               <Button 
                 variant="outline"
-                onClick={() => {
-                  // Use hidden iframe to trigger download - most reliable method
-                  const iframe = document.createElement('iframe');
-                  iframe.style.display = 'none';
-                  iframe.src = `${API}/import/sales-template`;
-                  document.body.appendChild(iframe);
-                  // Remove iframe after download starts
-                  setTimeout(() => {
-                    document.body.removeChild(iframe);
-                  }, 5000);
-                  toast.success("Download started - check your Downloads folder");
+                onClick={async () => {
+                  try {
+                    toast.info("Downloading template...");
+                    const response = await axios.get(`${API}/import/sales-template`, {
+                      responseType: 'blob'
+                    });
+                    saveAs(response.data, 'sales_template.xlsx');
+                    toast.success("Template downloaded successfully!");
+                  } catch (err) {
+                    console.error("Download error:", err);
+                    toast.error("Download failed. Try right-clicking and 'Save Link As'");
+                  }
                 }}
                 data-testid="download-template-btn"
               >
