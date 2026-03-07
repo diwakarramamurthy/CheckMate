@@ -404,6 +404,54 @@ class CommonDevelopmentWorksResponse(CommonDevelopmentWorksBase):
     works_id: str
     created_at: str
 
+# Infrastructure Cost Estimates (for Buildings & Infrastructure page)
+class InfrastructureCostItem(BaseModel):
+    estimated_cost: float = 0
+    is_applicable: bool = True
+
+class InfrastructureCostBase(BaseModel):
+    project_id: str
+    road_footpath_storm_drain: InfrastructureCostItem = InfrastructureCostItem()
+    underground_sewage_network: InfrastructureCostItem = InfrastructureCostItem()
+    sewage_treatment_plant: InfrastructureCostItem = InfrastructureCostItem()
+    overhead_sump_reservoir: InfrastructureCostItem = InfrastructureCostItem()
+    underground_water_distribution: InfrastructureCostItem = InfrastructureCostItem()
+    electric_substation_cables: InfrastructureCostItem = InfrastructureCostItem()
+    street_lights: InfrastructureCostItem = InfrastructureCostItem()
+    entry_gate: InfrastructureCostItem = InfrastructureCostItem()
+    boundary_wall: InfrastructureCostItem = InfrastructureCostItem()
+
+class InfrastructureCostCreate(InfrastructureCostBase):
+    pass
+
+class InfrastructureCostResponse(InfrastructureCostBase):
+    model_config = ConfigDict(extra="ignore")
+    cost_id: str
+    total_infrastructure_cost: float = 0
+    created_at: str
+
+# Estimated Development Cost (Fixed values set at project start)
+class EstimatedDevelopmentCostBase(BaseModel):
+    project_id: str
+    # Buildings cost - auto-calculated from sum of all buildings
+    buildings_cost: float = 0
+    # Infrastructure cost - from infrastructure cost section
+    infrastructure_cost: float = 0
+    # Consultants fee - manual input
+    consultants_fee: float = 0
+    # Cost of Machineries - manual input
+    machinery_cost: float = 0
+
+class EstimatedDevelopmentCostCreate(EstimatedDevelopmentCostBase):
+    pass
+
+class EstimatedDevelopmentCostResponse(EstimatedDevelopmentCostBase):
+    model_config = ConfigDict(extra="ignore")
+    estimate_id: str
+    total_estimated_development_cost: float = 0
+    created_at: str
+    updated_at: Optional[str] = None
+
 # FORM-4: Detailed Project Cost structure matching CA Certificate format
 class ProjectCostBase(BaseModel):
     project_id: str
@@ -948,6 +996,163 @@ async def delete_building(building_id: str, current_user: dict = Depends(get_cur
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Building not found")
     return {"message": "Building deleted"}
+
+# =========================
+# INFRASTRUCTURE COST ROUTES
+# =========================
+
+INFRASTRUCTURE_ITEMS = [
+    {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 25.0},
+    {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 15.0},
+    {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 10.0},
+    {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 10.0},
+    {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 12.5},
+    {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 12.5},
+    {"id": "street_lights", "name": "Street Lights", "weightage": 5.0},
+    {"id": "entry_gate", "name": "Entry Gate", "weightage": 3.0},
+    {"id": "boundary_wall", "name": "Boundary wall", "weightage": 7.0}
+]
+
+@api_router.get("/infrastructure-costs/template")
+async def get_infrastructure_cost_template():
+    """Returns infrastructure cost items with weightages"""
+    return {"items": INFRASTRUCTURE_ITEMS, "total_weightage": 100.0}
+
+@api_router.post("/infrastructure-costs")
+async def create_infrastructure_cost(
+    project_id: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+    request: Request = None
+):
+    """Save infrastructure cost estimates"""
+    costs = await request.json() if request else {}
+    
+    # Calculate total infrastructure cost
+    total = 0
+    for item in INFRASTRUCTURE_ITEMS:
+        item_data = costs.get(item["id"], {})
+        if item_data.get("is_applicable", True):
+            total += item_data.get("estimated_cost", 0)
+    
+    cost_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    cost_doc = {
+        "cost_id": cost_id,
+        "project_id": project_id,
+        "costs": costs,
+        "total_infrastructure_cost": total,
+        "created_at": now
+    }
+    
+    await db.infrastructure_costs.update_one(
+        {"project_id": project_id},
+        {"$set": cost_doc},
+        upsert=True
+    )
+    
+    return cost_doc
+
+@api_router.get("/infrastructure-costs/{project_id}")
+async def get_infrastructure_cost(project_id: str, current_user: dict = Depends(get_current_user)):
+    cost = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
+    if not cost:
+        # Return empty structure
+        return {
+            "project_id": project_id,
+            "costs": {},
+            "total_infrastructure_cost": 0
+        }
+    return cost
+
+# =========================
+# ESTIMATED DEVELOPMENT COST ROUTES
+# =========================
+
+@api_router.post("/estimated-development-cost")
+async def create_estimated_development_cost(
+    project_id: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+    request: Request = None
+):
+    """Save estimated development cost (fixed values for project lifecycle)"""
+    data = await request.json() if request else {}
+    
+    # Get total buildings cost from all buildings
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+    buildings_cost = sum(b.get("estimated_cost", 0) for b in buildings)
+    
+    # Get infrastructure cost
+    infra_cost = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
+    infrastructure_cost = infra_cost.get("total_infrastructure_cost", 0) if infra_cost else data.get("infrastructure_cost", 0)
+    
+    # Get manual inputs
+    consultants_fee = data.get("consultants_fee", 0)
+    machinery_cost = data.get("machinery_cost", 0)
+    
+    # Calculate total
+    total = buildings_cost + infrastructure_cost + consultants_fee + machinery_cost
+    
+    estimate_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    estimate_doc = {
+        "estimate_id": estimate_id,
+        "project_id": project_id,
+        "buildings_cost": buildings_cost,
+        "infrastructure_cost": infrastructure_cost,
+        "consultants_fee": consultants_fee,
+        "machinery_cost": machinery_cost,
+        "total_estimated_development_cost": total,
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.estimated_development_costs.update_one(
+        {"project_id": project_id},
+        {"$set": estimate_doc},
+        upsert=True
+    )
+    
+    return estimate_doc
+
+@api_router.get("/estimated-development-cost/{project_id}")
+async def get_estimated_development_cost(project_id: str, current_user: dict = Depends(get_current_user)):
+    estimate = await db.estimated_development_costs.find_one({"project_id": project_id}, {"_id": 0})
+    
+    if not estimate:
+        # Calculate current values
+        buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+        buildings_cost = sum(b.get("estimated_cost", 0) for b in buildings)
+        
+        infra_cost = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
+        infrastructure_cost = infra_cost.get("total_infrastructure_cost", 0) if infra_cost else 0
+        
+        return {
+            "project_id": project_id,
+            "buildings_cost": buildings_cost,
+            "infrastructure_cost": infrastructure_cost,
+            "consultants_fee": 0,
+            "machinery_cost": 0,
+            "total_estimated_development_cost": buildings_cost + infrastructure_cost,
+            "is_draft": True
+        }
+    
+    return estimate
+
+@api_router.get("/estimated-development-cost/{project_id}/refresh-buildings")
+async def refresh_buildings_cost(project_id: str, current_user: dict = Depends(get_current_user)):
+    """Refresh buildings cost from current building data (before saving estimate)"""
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+    buildings_cost = sum(b.get("estimated_cost", 0) for b in buildings)
+    
+    infra_cost = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
+    infrastructure_cost = infra_cost.get("total_infrastructure_cost", 0) if infra_cost else 0
+    
+    return {
+        "buildings_cost": buildings_cost,
+        "infrastructure_cost": infrastructure_cost
+    }
 
 # =========================
 # CONSTRUCTION PROGRESS ROUTES

@@ -7,7 +7,7 @@ import {
   Building2, LayoutDashboard, FolderKanban, FileText, Upload, Settings, 
   LogOut, Menu, X, ChevronRight, Plus, Pencil, Trash2, Download,
   AlertCircle, CheckCircle2, TrendingUp, Users, IndianRupee, Building,
-  FileSpreadsheet, ClipboardList, ChevronDown, Eye, Loader2
+  FileSpreadsheet, ClipboardList, ChevronDown, Eye, Loader2, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,7 +138,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: FolderKanban, label: "Projects", path: "/projects" },
-    { icon: Building, label: "Buildings", path: "/buildings" },
+    { icon: Building, label: "Buildings & Infra", path: "/buildings" },
     { icon: TrendingUp, label: "Construction Progress", path: "/construction" },
     { icon: IndianRupee, label: "Project Costs", path: "/costs" },
     { icon: Users, label: "Sales & Receivables", path: "/sales" },
@@ -1324,6 +1324,13 @@ const BuildingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [buildingToDelete, setBuildingToDelete] = useState(null);
+  const [activeTab, setActiveTab] = useState("buildings");
+  
+  // Infrastructure costs state
+  const [infraTemplate, setInfraTemplate] = useState([]);
+  const [infraCosts, setInfraCosts] = useState({});
+  const [totalInfraCost, setTotalInfraCost] = useState(0);
+  const [totalBuildingsCost, setTotalBuildingsCost] = useState(0);
   
   const defaultForm = {
     building_name: "",
@@ -1346,13 +1353,29 @@ const BuildingsPage = () => {
   useEffect(() => {
     fetchProjects();
     fetchBuildingTypes();
+    fetchInfraTemplate();
   }, []);
 
   useEffect(() => {
     if (selectedProject) {
       fetchBuildings();
+      fetchInfraCosts();
     }
   }, [selectedProject]);
+
+  useEffect(() => {
+    // Calculate totals
+    const bldgTotal = buildings.reduce((sum, b) => sum + (b.estimated_cost || 0), 0);
+    setTotalBuildingsCost(bldgTotal);
+    
+    let infraTotal = 0;
+    infraTemplate.forEach(item => {
+      const cost = infraCosts[item.id]?.estimated_cost || 0;
+      const isApplicable = infraCosts[item.id]?.is_applicable !== false;
+      if (isApplicable) infraTotal += cost;
+    });
+    setTotalInfraCost(infraTotal);
+  }, [buildings, infraCosts, infraTemplate]);
 
   const fetchProjects = async () => {
     try {
@@ -1374,6 +1397,24 @@ const BuildingsPage = () => {
       setBuildingTypes(res.data.types || []);
     } catch (err) {
       console.error("Failed to load building types");
+    }
+  };
+
+  const fetchInfraTemplate = async () => {
+    try {
+      const res = await axios.get(`${API}/infrastructure-costs/template`);
+      setInfraTemplate(res.data.items || []);
+    } catch (err) {
+      console.error("Failed to load infrastructure template");
+    }
+  };
+
+  const fetchInfraCosts = async () => {
+    try {
+      const res = await axios.get(`${API}/infrastructure-costs/${selectedProject}`);
+      setInfraCosts(res.data.costs || {});
+    } catch (err) {
+      console.error("Failed to load infrastructure costs");
     }
   };
 
@@ -1474,6 +1515,40 @@ const BuildingsPage = () => {
     } finally {
       setDeleteDialogOpen(false);
       setBuildingToDelete(null);
+    }
+  };
+
+  // Infrastructure cost handlers
+  const handleInfraCostChange = (itemId, value) => {
+    setInfraCosts(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        estimated_cost: parseFloat(value) || 0,
+        is_applicable: prev[itemId]?.is_applicable !== false
+      }
+    }));
+  };
+
+  const handleInfraApplicableChange = (itemId, isApplicable) => {
+    setInfraCosts(prev => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        is_applicable: isApplicable
+      }
+    }));
+  };
+
+  const saveInfraCosts = async () => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/infrastructure-costs?project_id=${selectedProject}`, infraCosts);
+      toast.success("Infrastructure costs saved");
+    } catch (err) {
+      toast.error("Failed to save infrastructure costs");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1631,148 +1706,275 @@ const BuildingsPage = () => {
       <div className="space-y-6" data-testid="buildings-page">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 font-heading">Buildings / Wings</h1>
-            <p className="text-slate-600">Manage project buildings with detailed floor configurations</p>
+            <h1 className="text-2xl font-bold text-slate-900 font-heading">Buildings & Infrastructure</h1>
+            <p className="text-slate-600">Manage buildings and infrastructure development costs</p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Select value={selectedProject} onValueChange={setSelectedProject}>
-              <SelectTrigger className="w-48" data-testid="project-select">
-                <SelectValue placeholder="Select project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.project_id} value={p.project_id}>{p.project_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            {/* Bulk Add Dialog */}
-            <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  variant="outline"
-                  onClick={() => setBulkForm({ building_names: "", ...defaultForm })}
-                  data-testid="bulk-add-btn"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Bulk Add
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Bulk Add Buildings</DialogTitle>
-                  <DialogDescription>Create multiple buildings with the same configuration</DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh] pr-4">
-                  {renderFormFields(bulkForm, setBulkForm, true)}
-                </ScrollArea>
-                <DialogFooter className="mt-4">
-                  <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleBulkSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={saving} data-testid="bulk-save-btn">
-                    {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Create Buildings
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            
-            {/* Single Add Dialog */}
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => {
-                    setEditingBuilding(null);
-                    setForm(defaultForm);
-                  }}
-                  data-testid="add-building-btn"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Building
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>{editingBuilding ? "Edit" : "Add"} Building</DialogTitle>
-                  <DialogDescription>Configure building type and floor details</DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh] pr-4">
-                  {renderFormFields(form, setForm, false)}
-                </ScrollArea>
-                <DialogFooter className="mt-4">
-                  <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={saving} data-testid="save-building-btn">
-                    {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    {editingBuilding ? "Update" : "Create"} Building
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+          <Select value={selectedProject} onValueChange={setSelectedProject}>
+            <SelectTrigger className="w-48" data-testid="project-select">
+              <SelectValue placeholder="Select project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((p) => (
+                <SelectItem key={p.project_id} value={p.project_id}>{p.project_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Summary Cards */}
+        {selectedProject && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-slate-500">Total Buildings Cost</div>
+                <div className="text-2xl font-bold text-slate-900">{formatCurrency(totalBuildingsCost)}</div>
+                <div className="text-xs text-slate-400">{buildings.length} buildings</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-slate-500">Total Infrastructure Cost</div>
+                <div className="text-2xl font-bold text-slate-900">{formatCurrency(totalInfraCost)}</div>
+                <div className="text-xs text-slate-400">{infraTemplate.length} items</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-50">
+              <CardContent className="p-4">
+                <div className="text-sm text-blue-600 font-medium">Combined Total</div>
+                <div className="text-2xl font-bold text-blue-700">{formatCurrency(totalBuildingsCost + totalInfraCost)}</div>
+                <div className="text-xs text-blue-500">Buildings + Infrastructure</div>
+              </CardContent>
+            </Card>
           </div>
+        )}
+
+        {/* Tab Navigation */}
+        <div className="flex gap-2 border-b border-slate-200 pb-2">
+          <Button
+            variant={activeTab === "buildings" ? "default" : "outline"}
+            onClick={() => setActiveTab("buildings")}
+            className={activeTab === "buildings" ? "bg-blue-600" : ""}
+          >
+            <Building className="h-4 w-4 mr-2" />
+            Buildings ({buildings.length})
+          </Button>
+          <Button
+            variant={activeTab === "infrastructure" ? "default" : "outline"}
+            onClick={() => setActiveTab("infrastructure")}
+            className={activeTab === "infrastructure" ? "bg-blue-600" : ""}
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Infrastructure Works
+          </Button>
         </div>
 
         {!selectedProject ? (
           <Card className="text-center py-12">
             <p className="text-slate-600">Please select a project first</p>
           </Card>
-        ) : buildings.length === 0 ? (
-          <Card className="text-center py-12">
-            <Building className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-600 mb-2">No buildings added yet.</p>
-            <p className="text-sm text-slate-500">Click "Add Building" or "Bulk Add" to create buildings.</p>
-          </Card>
+        ) : activeTab === "buildings" ? (
+          /* Buildings Tab */
+          <>
+            <div className="flex justify-end gap-3">
+              {/* Bulk Add Dialog */}
+              <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline"
+                    onClick={() => setBulkForm({ building_names: "", ...defaultForm })}
+                    data-testid="bulk-add-btn"
+                  >
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Bulk Add
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Bulk Add Buildings</DialogTitle>
+                    <DialogDescription>Create multiple buildings with the same configuration</DialogDescription>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-[60vh] pr-4">
+                    {renderFormFields(bulkForm, setBulkForm, true)}
+                  </ScrollArea>
+                  <DialogFooter className="mt-4">
+                    <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleBulkSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={saving} data-testid="bulk-save-btn">
+                      {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Create Buildings
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              
+              {/* Single Add Dialog */}
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-700"
+                    onClick={() => {
+                      setEditingBuilding(null);
+                      setForm(defaultForm);
+                    }}
+                    data-testid="add-building-btn"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Building
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>{editingBuilding ? "Edit" : "Add"} Building</DialogTitle>
+                    <DialogDescription>Configure building type and floor details</DialogDescription>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-[60vh] pr-4">
+                    {renderFormFields(form, setForm, false)}
+                  </ScrollArea>
+                  <DialogFooter className="mt-4">
+                    <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={saving} data-testid="save-building-btn">
+                      {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      {editingBuilding ? "Update" : "Create"} Building
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {buildings.length === 0 ? (
+              <Card className="text-center py-12">
+                <Building className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+                <p className="text-slate-600 mb-2">No buildings added yet.</p>
+                <p className="text-sm text-slate-500">Click "Add Building" or "Bulk Add" to create buildings.</p>
+              </Card>
+            ) : (
+              <Card>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Building Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="text-center">Parking</TableHead>
+                        <TableHead className="text-center">Floors</TableHead>
+                        <TableHead className="text-center">Units</TableHead>
+                        <TableHead className="text-right">Est. Cost</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {buildings.map((b) => (
+                        <TableRow key={b.building_id} data-testid={`building-row-${b.building_id}`}>
+                          <TableCell className="font-medium">{b.building_name}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="text-xs">
+                              {getBuildingTypeLabel(b.building_type).split(' ').slice(0, 2).join(' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="text-sm" title="Basement / Stilt / Upper">
+                              {b.parking_basement || 0}/{b.parking_stilt_ground || 0}/{b.parking_upper_level || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="text-sm">
+                              {b.building_type === "mixed_tower" 
+                                ? `${b.commercial_floors || 0}C + ${b.residential_floors || 0}R`
+                                : b.residential_floors || b.floors || 0
+                              }
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">{b.units || 0}</TableCell>
+                          <TableCell className="text-right currency">{formatCurrency(b.estimated_cost)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(b)} data-testid={`edit-building-${b.building_id}`}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteBuilding(b)} data-testid={`delete-building-${b.building_id}`}>
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {/* Total Row */}
+                      <TableRow className="bg-slate-50 font-semibold">
+                        <TableCell colSpan={5} className="text-right">Total Buildings Cost:</TableCell>
+                        <TableCell className="text-right currency">{formatCurrency(totalBuildingsCost)}</TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+            )}
+          </>
         ) : (
+          /* Infrastructure Tab */
           <Card>
-            <div className="overflow-x-auto">
+            <CardHeader>
+              <CardTitle className="text-lg">Project Infrastructure Works</CardTitle>
+              <p className="text-sm text-slate-500">Enter estimated cost for each infrastructure item. Mark N/A for items not applicable to your project.</p>
+            </CardHeader>
+            <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Building Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-center">Parking</TableHead>
-                    <TableHead className="text-center">Floors</TableHead>
-                    <TableHead className="text-center">Units</TableHead>
-                    <TableHead className="text-right">Est. Cost</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="w-8">N/A</TableHead>
+                    <TableHead>Infrastructure Item</TableHead>
+                    <TableHead className="text-center w-20">Wt. %</TableHead>
+                    <TableHead className="text-right w-48">Estimated Cost (₹)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {buildings.map((b) => (
-                    <TableRow key={b.building_id} data-testid={`building-row-${b.building_id}`}>
-                      <TableCell className="font-medium">{b.building_name}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {getBuildingTypeLabel(b.building_type).split(' ').slice(0, 2).join(' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="text-sm" title="Basement / Stilt / Upper">
-                          {b.parking_basement || 0}/{b.parking_stilt_ground || 0}/{b.parking_upper_level || 0}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="text-sm">
-                          {b.building_type === "mixed_tower" 
-                            ? `${b.commercial_floors || 0}C + ${b.residential_floors || 0}R`
-                            : b.residential_floors || b.floors || 0
-                          }
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">{b.units || 0}</TableCell>
-                      <TableCell className="text-right currency">{formatCurrency(b.estimated_cost)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(b)} data-testid={`edit-building-${b.building_id}`}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteBuilding(b)} data-testid={`delete-building-${b.building_id}`}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {infraTemplate.map((item, idx) => {
+                    const itemData = infraCosts[item.id] || { estimated_cost: 0, is_applicable: true };
+                    const isNA = itemData.is_applicable === false;
+                    
+                    return (
+                      <TableRow key={item.id} className={isNA ? "bg-slate-100 opacity-60" : ""}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={isNA}
+                            onChange={(e) => handleInfraApplicableChange(item.id, !e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300"
+                            title="Mark as Not Applicable"
+                          />
+                        </TableCell>
+                        <TableCell className={`font-medium ${isNA ? "line-through text-slate-400" : ""}`}>
+                          <span className="text-slate-500 mr-2">{idx + 1}.</span>
+                          {item.name}
+                        </TableCell>
+                        <TableCell className="text-center">{item.weightage}%</TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            value={itemData.estimated_cost || ""}
+                            onChange={(e) => handleInfraCostChange(item.id, e.target.value)}
+                            disabled={isNA}
+                            className="w-40 ml-auto text-right"
+                            placeholder="0"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {/* Total Row */}
+                  <TableRow className="bg-blue-50 font-semibold">
+                    <TableCell colSpan={3} className="text-right">Total Infrastructure Cost:</TableCell>
+                    <TableCell className="text-right currency text-blue-700">{formatCurrency(totalInfraCost)}</TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
-            </div>
+              
+              <div className="flex justify-end mt-4">
+                <Button onClick={saveInfraCosts} className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                  {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Save Infrastructure Costs
+                </Button>
+              </div>
+            </CardContent>
           </Card>
         )}
       </div>
@@ -2351,6 +2553,16 @@ const ProjectCostsPage = () => {
     estimated_development_cost: 0
   });
   const [saving, setSaving] = useState(false);
+  
+  // Estimated Development Cost breakdown (fixed values)
+  const [estimatedDevCost, setEstimatedDevCost] = useState({
+    buildings_cost: 0,
+    infrastructure_cost: 0,
+    consultants_fee: 0,
+    machinery_cost: 0,
+    total: 0,
+    is_locked: false
+  });
 
   useEffect(() => {
     fetchProjects();
@@ -2359,6 +2571,7 @@ const ProjectCostsPage = () => {
   useEffect(() => {
     if (selectedProject) {
       fetchCost();
+      fetchEstimatedDevCost();
     }
   }, [selectedProject, quarter, year]);
 
@@ -2379,8 +2592,64 @@ const ProjectCostsPage = () => {
     }
   };
 
+  const fetchEstimatedDevCost = async () => {
+    try {
+      const res = await axios.get(`${API}/estimated-development-cost/${selectedProject}`);
+      setEstimatedDevCost({
+        buildings_cost: res.data.buildings_cost || 0,
+        infrastructure_cost: res.data.infrastructure_cost || 0,
+        consultants_fee: res.data.consultants_fee || 0,
+        machinery_cost: res.data.machinery_cost || 0,
+        total: res.data.total_estimated_development_cost || 0,
+        is_locked: !res.data.is_draft
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const refreshBuildingsInfraCost = async () => {
+    try {
+      const res = await axios.get(`${API}/estimated-development-cost/${selectedProject}/refresh-buildings`);
+      setEstimatedDevCost(prev => ({
+        ...prev,
+        buildings_cost: res.data.buildings_cost,
+        infrastructure_cost: res.data.infrastructure_cost,
+        total: res.data.buildings_cost + res.data.infrastructure_cost + prev.consultants_fee + prev.machinery_cost
+      }));
+      toast.success("Buildings & Infrastructure costs refreshed");
+    } catch (err) {
+      toast.error("Failed to refresh costs");
+    }
+  };
+
+  const saveEstimatedDevCost = async () => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/estimated-development-cost?project_id=${selectedProject}`, {
+        consultants_fee: estimatedDevCost.consultants_fee,
+        machinery_cost: estimatedDevCost.machinery_cost
+      });
+      toast.success("Estimated Development Cost saved and locked");
+      fetchEstimatedDevCost();
+    } catch (err) {
+      toast.error("Failed to save estimated cost");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleChange = (field, value) => {
     setCost(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+  };
+
+  const handleEstimatedChange = (field, value) => {
+    const newValue = parseFloat(value) || 0;
+    setEstimatedDevCost(prev => {
+      const updated = { ...prev, [field]: newValue };
+      updated.total = updated.buildings_cost + updated.infrastructure_cost + updated.consultants_fee + updated.machinery_cost;
+      return updated;
+    });
   };
 
   const totalLandCost = cost.land_acquisition_cost + cost.development_rights_premium + 
@@ -2389,7 +2658,7 @@ const ProjectCostsPage = () => {
   const totalDevCost = cost.construction_cost + cost.infrastructure_cost + 
     cost.equipment_cost + cost.taxes_statutory + cost.finance_cost;
   
-  const totalEstimated = cost.estimated_land_cost + cost.estimated_development_cost;
+  const totalEstimated = cost.estimated_land_cost + estimatedDevCost.total;
   const totalIncurred = totalLandCost + totalDevCost;
   const balanceCost = totalEstimated - totalIncurred;
 
@@ -2400,7 +2669,8 @@ const ProjectCostsPage = () => {
         project_id: selectedProject,
         quarter,
         year,
-        ...cost
+        ...cost,
+        estimated_development_cost: estimatedDevCost.total
       });
       toast.success("Cost data saved");
     } catch (err) {
@@ -2486,10 +2756,87 @@ const ProjectCostsPage = () => {
 
         {/* Cost Forms */}
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Estimated Costs */}
+          {/* Estimated Development Cost Breakdown - NEW */}
+          <Card className="md:col-span-2 border-2 border-blue-200">
+            <CardHeader className="bg-blue-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg text-blue-800">Estimated Development Cost Breakdown</CardTitle>
+                  <CardDescription>This total is fixed once saved and used in all quarterly reports</CardDescription>
+                </div>
+                {!estimatedDevCost.is_locked && (
+                  <Button variant="outline" size="sm" onClick={refreshBuildingsInfraCost}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh from Buildings
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                  <Label className="form-label">1. Buildings Cost</Label>
+                  <Input
+                    type="number"
+                    value={estimatedDevCost.buildings_cost}
+                    disabled
+                    className="bg-slate-100 font-medium"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Auto-calculated from Buildings section</p>
+                </div>
+                <div>
+                  <Label className="form-label">2. Infrastructure Cost</Label>
+                  <Input
+                    type="number"
+                    value={estimatedDevCost.infrastructure_cost}
+                    disabled
+                    className="bg-slate-100 font-medium"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">From Infrastructure Works section</p>
+                </div>
+                <div>
+                  <Label className="form-label">3. Consultants Fee</Label>
+                  <Input
+                    type="number"
+                    value={estimatedDevCost.consultants_fee}
+                    onChange={(e) => handleEstimatedChange("consultants_fee", e.target.value)}
+                    disabled={estimatedDevCost.is_locked}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Manual input</p>
+                </div>
+                <div>
+                  <Label className="form-label">4. Cost of Machineries</Label>
+                  <Input
+                    type="number"
+                    value={estimatedDevCost.machinery_cost}
+                    onChange={(e) => handleEstimatedChange("machinery_cost", e.target.value)}
+                    disabled={estimatedDevCost.is_locked}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Manual input</p>
+                </div>
+              </div>
+              <Separator className="my-6" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-500">Total Estimated Development Cost</p>
+                  <p className="text-3xl font-bold text-blue-700 currency">{formatCurrency(estimatedDevCost.total)}</p>
+                  {estimatedDevCost.is_locked && (
+                    <Badge variant="secondary" className="mt-2">Locked - Used in all reports</Badge>
+                  )}
+                </div>
+                {!estimatedDevCost.is_locked && (
+                  <Button onClick={saveEstimatedDevCost} className="bg-blue-600 hover:bg-blue-700">
+                    Save & Lock Estimate
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Estimated Land Cost */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Estimated Costs</CardTitle>
+              <CardTitle className="text-lg">Estimated Land Cost</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -2498,14 +2845,6 @@ const ProjectCostsPage = () => {
                   type="number"
                   value={cost.estimated_land_cost}
                   onChange={(e) => handleChange("estimated_land_cost", e.target.value)}
-                />
-              </div>
-              <div>
-                <Label className="form-label">Estimated Development Cost (₹)</Label>
-                <Input
-                  type="number"
-                  value={cost.estimated_development_cost}
-                  onChange={(e) => handleChange("estimated_development_cost", e.target.value)}
                 />
               </div>
             </CardContent>
