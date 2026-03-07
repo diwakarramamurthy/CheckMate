@@ -30,7 +30,7 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
 # Create the main app
-app = FastAPI(title="RERA Compliance Manager API")
+app = FastAPI(title="CheckMate - RERA Manager API")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
@@ -2141,7 +2141,7 @@ async def get_sales_template():
     
     return FileResponse(
         path=temp_file.name,
-        filename="sales_template.xlsx",
+        filename="CheckMate - Sales Data.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
@@ -2576,7 +2576,7 @@ async def validate_project_data(project_id: str, current_user: dict = Depends(ge
 
 @api_router.get("/")
 async def root():
-    return {"message": "RERA Compliance Manager API", "version": "1.0.0"}
+    return {"message": "CheckMate - RERA Manager API", "version": "1.0.0"}
 
 @api_router.get("/health")
 async def health_check():
@@ -2609,7 +2609,7 @@ async def startup():
     if not existing:
         await initialize_goa_templates()
     
-    logger.info("RERA Compliance Manager API started")
+    logger.info("CheckMate - RERA Manager API started")
 
 async def initialize_goa_templates():
     """Initialize default Goa RERA report templates"""

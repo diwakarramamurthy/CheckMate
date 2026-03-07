@@ -229,8 +229,8 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
               <Building2 className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="font-bold text-lg font-heading">RERA Manager</h1>
-              <p className="text-xs text-white/60">Compliance Suite</p>
+              <h1 className="font-bold text-lg font-heading">CheckMate - RERA Manager</h1>
+              <p className="text-xs text-white/60">RERA Compliance Suite</p>
             </div>
             <button 
               onClick={() => setIsOpen(false)}
@@ -309,7 +309,7 @@ const Layout = ({ children }) => {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="font-bold text-lg">RERA Manager</h1>
+          <h1 className="font-bold text-lg">CheckMate - RERA Manager</h1>
         </header>
         <main className="flex-1 p-4 lg:p-8">
           {children}
@@ -366,7 +366,7 @@ const LoginPage = () => {
         <div className="absolute inset-0 bg-gradient-to-br from-blue-950/90 to-slate-900/90" />
         <div className="relative z-10 flex flex-col justify-center p-12 text-white">
           <Building2 className="h-12 w-12 mb-6" />
-          <h1 className="text-4xl font-bold mb-4 font-heading">RERA Compliance Manager</h1>
+          <h1 className="text-4xl font-bold mb-4 font-heading">CheckMate - RERA Manager</h1>
           <p className="text-lg text-white/80 max-w-md">
             Automate your RERA compliance reporting. Generate all statutory certificates in minutes.
           </p>
@@ -394,7 +394,7 @@ const LoginPage = () => {
             <div className="w-10 h-10 rounded-lg bg-blue-950 flex items-center justify-center">
               <Building2 className="h-6 w-6 text-white" />
             </div>
-            <h1 className="font-bold text-xl">RERA Manager</h1>
+            <h1 className="font-bold text-xl">CheckMate - RERA Manager</h1>
           </div>
 
           <div className="mb-8">
@@ -3756,7 +3756,7 @@ const ImportPage = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'sales_template.xlsx';
+      link.download = 'CheckMate - Sales Data.xlsx';
       
       // Append to body, click, and remove
       document.body.appendChild(link);
