@@ -2564,6 +2564,14 @@ const ProjectCostsPage = () => {
     is_locked: false
   });
 
+  // Actual costs calculated from progress
+  const [actualCosts, setActualCosts] = useState({
+    construction_cost: 0,
+    infrastructure_cost: 0,
+    construction_completion: 0,
+    infrastructure_completion: 0
+  });
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -2572,6 +2580,7 @@ const ProjectCostsPage = () => {
     if (selectedProject) {
       fetchCost();
       fetchEstimatedDevCost();
+      fetchActualCostsFromProgress();
     }
   }, [selectedProject, quarter, year]);
 
@@ -2605,6 +2614,65 @@ const ProjectCostsPage = () => {
       });
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Fetch actual costs from construction progress
+  const fetchActualCostsFromProgress = async () => {
+    try {
+      // Get all buildings with their costs
+      const buildingsRes = await axios.get(`${API}/buildings?project_id=${selectedProject}`);
+      const buildings = buildingsRes.data || [];
+      
+      // Get construction progress for each building
+      const progressRes = await axios.get(`${API}/construction-progress?project_id=${selectedProject}&quarter=${quarter}&year=${year}`);
+      const progressData = progressRes.data || [];
+      
+      // Calculate actual construction cost: Sum of (building cost × completion %)
+      let totalConstructionActual = 0;
+      let totalBuildingsCost = 0;
+      
+      buildings.forEach(building => {
+        const buildingCost = building.estimated_cost || 0;
+        totalBuildingsCost += buildingCost;
+        
+        const progress = progressData.find(p => p.building_id === building.building_id);
+        const completion = progress?.overall_completion || 0;
+        totalConstructionActual += buildingCost * completion / 100;
+      });
+      
+      const avgConstructionCompletion = totalBuildingsCost > 0 
+        ? (totalConstructionActual / totalBuildingsCost * 100) 
+        : 0;
+      
+      // Get infrastructure progress
+      const infraProgressRes = await axios.get(`${API}/infrastructure-progress?project_id=${selectedProject}&quarter=${quarter}&year=${year}`);
+      const infraProgress = infraProgressRes.data?.[0];
+      const infraCompletion = infraProgress?.overall_completion || 0;
+      
+      // Get infrastructure cost
+      const infraCostRes = await axios.get(`${API}/infrastructure-costs/${selectedProject}`);
+      const totalInfraCost = infraCostRes.data?.total_infrastructure_cost || 0;
+      
+      // Calculate actual infrastructure cost
+      const infraActual = totalInfraCost * infraCompletion / 100;
+      
+      setActualCosts({
+        construction_cost: totalConstructionActual,
+        infrastructure_cost: infraActual,
+        construction_completion: avgConstructionCompletion,
+        infrastructure_completion: infraCompletion
+      });
+      
+      // Update cost state with calculated values
+      setCost(prev => ({
+        ...prev,
+        construction_cost: totalConstructionActual,
+        infrastructure_cost: infraActual
+      }));
+      
+    } catch (err) {
+      console.error("Failed to fetch actual costs from progress", err);
     }
   };
 
@@ -2655,7 +2723,8 @@ const ProjectCostsPage = () => {
   const totalLandCost = cost.land_acquisition_cost + cost.development_rights_premium + 
     cost.tdr_cost + cost.stamp_duty + cost.government_charges + cost.encumbrance_removal;
   
-  const totalDevCost = cost.construction_cost + cost.infrastructure_cost + 
+  // Use actual costs from progress for construction and infrastructure
+  const totalDevCost = actualCosts.construction_cost + actualCosts.infrastructure_cost + 
     cost.equipment_cost + cost.taxes_statutory + cost.finance_cost;
   
   const totalEstimated = cost.estimated_land_cost + estimatedDevCost.total;
@@ -2887,17 +2956,41 @@ const ProjectCostsPage = () => {
           {/* Development Costs */}
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle className="text-lg">Development Costs (Actual)</CardTitle>
-              <CardDescription>Total: {formatCurrency(totalDevCost)}</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Development Costs (Actual)</CardTitle>
+                  <CardDescription>Total: {formatCurrency(totalDevCost)}</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={fetchActualCostsFromProgress}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh from Progress
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
                 <Label className="form-label text-xs">Construction</Label>
-                <Input type="number" value={cost.construction_cost} onChange={(e) => handleChange("construction_cost", e.target.value)} />
+                <Input 
+                  type="number" 
+                  value={actualCosts.construction_cost} 
+                  disabled 
+                  className="bg-green-50 border-green-200 font-medium"
+                />
+                <p className="text-xs text-green-600 mt-1">
+                  {formatNumber(actualCosts.construction_completion, 1)}% complete
+                </p>
               </div>
               <div>
                 <Label className="form-label text-xs">Infrastructure</Label>
-                <Input type="number" value={cost.infrastructure_cost} onChange={(e) => handleChange("infrastructure_cost", e.target.value)} />
+                <Input 
+                  type="number" 
+                  value={actualCosts.infrastructure_cost} 
+                  disabled 
+                  className="bg-green-50 border-green-200 font-medium"
+                />
+                <p className="text-xs text-green-600 mt-1">
+                  {formatNumber(actualCosts.infrastructure_completion, 1)}% complete
+                </p>
               </div>
               <div>
                 <Label className="form-label text-xs">Equipment</Label>
