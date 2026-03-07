@@ -3420,41 +3420,23 @@ const ReportsPage = () => {
       
       const blob = new Blob([response.data], { type: 'application/pdf' });
       
-      // Try to use File System Access API for "Save As" dialog
-      if (window.showSaveFilePicker) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: filename,
-            types: [{
-              description: 'PDF Files',
-              accept: { 'application/pdf': ['.pdf'] }
-            }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          toast.success("PDF saved successfully");
-          return;
-        } catch (err) {
-          // User cancelled the save dialog
-          if (err.name === 'AbortError') {
-            return;
-          }
-          // Fall through to default download
-        }
-      }
-      
-      // Fallback: Auto-download to default location
+      // Create a temporary URL and trigger download
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', filename);
+      link.download = filename;
+      
+      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
       
-      toast.success("PDF downloaded to your Downloads folder");
+      // Cleanup after a short delay
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success("PDF download started - check your Downloads folder");
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Failed to generate PDF";
       toast.error(errorMsg);
@@ -3663,6 +3645,7 @@ const ImportPage = () => {
 
   const downloadTemplate = async () => {
     try {
+      // Direct download using a hidden anchor tag with proper headers
       const response = await axios.get(`${API}/import/sales-template`, {
         responseType: 'blob'
       });
@@ -3671,44 +3654,26 @@ const ImportPage = () => {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
       });
       
-      // Try to use File System Access API for "Save As" dialog
-      if (window.showSaveFilePicker) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: 'sales_template.xlsx',
-            types: [{
-              description: 'Excel Files',
-              accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
-            }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          toast.success("Template saved successfully");
-          return;
-        } catch (err) {
-          // User cancelled the save dialog
-          if (err.name === 'AbortError') {
-            return;
-          }
-          // Fall through to default download
-        }
-      }
-      
-      // Fallback: Auto-download to default location
+      // Create a temporary URL and trigger download
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'sales_template.xlsx');
+      link.download = 'sales_template.xlsx';
+      
+      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
       
-      toast.success("Template downloaded to your Downloads folder");
+      // Cleanup after a short delay
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success("Template download started - check your Downloads folder");
     } catch (err) {
       toast.error("Failed to download template");
-      console.error(err);
+      console.error("Download error:", err);
     }
   };
 
