@@ -80,16 +80,37 @@ RULE_STYLE = ParagraphStyle(
 )
 
 def format_currency(amount):
-    """Format number as Indian currency"""
-    if amount is None:
-        return "0"
-    return f"₹{amount:,.2f}"
+    """Format number as Indian currency with lakh/crore separators"""
+    if amount is None or amount == 0:
+        return "₹0"
+    return "₹" + format_indian_number(amount)
 
 def format_indian_number(num):
-    """Format number in Indian numbering system (lakhs, crores)"""
-    if num is None:
+    """Format number in Indian numbering system (lakhs, crores)
+    Example: 7100000 -> 71,00,000
+             55195000 -> 5,51,95,000
+    """
+    if num is None or num == 0:
         return "0"
-    return f"{num:,.0f}"
+    
+    num = int(num)
+    is_negative = num < 0
+    num = abs(num)
+    
+    s = str(num)
+    
+    if len(s) <= 3:
+        result = s
+    else:
+        # Last 3 digits
+        result = s[-3:]
+        s = s[:-3]
+        # Then groups of 2
+        while s:
+            result = s[-2:] + "," + result
+            s = s[:-2]
+    
+    return "-" + result if is_negative else result
 
 def format_date(date_str):
     """Format date string"""
