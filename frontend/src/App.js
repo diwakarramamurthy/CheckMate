@@ -95,12 +95,20 @@ const AuthProvider = ({ children }) => {
 
 // Format currency helper
 const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return "₹ 0";
+  if (!amount && amount !== 0) return "₹0";
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0
   }).format(amount);
+};
+
+// Format number with Indian lakh/crore separators
+const formatIndianNumber = (num) => {
+  if (!num && num !== 0) return "0";
+  return new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 0
+  }).format(num);
 };
 
 // Format number helper
@@ -109,6 +117,51 @@ const formatNumber = (num, decimals = 2) => {
   return new Intl.NumberFormat('en-IN', {
     maximumFractionDigits: decimals
   }).format(num);
+};
+
+// Currency Input Component with Indian formatting
+const CurrencyInput = ({ value, onChange, disabled, className, placeholder }) => {
+  const [displayValue, setDisplayValue] = useState("");
+  
+  useEffect(() => {
+    if (value || value === 0) {
+      setDisplayValue(formatIndianNumber(value));
+    } else {
+      setDisplayValue("");
+    }
+  }, [value]);
+  
+  const handleChange = (e) => {
+    const input = e.target.value;
+    // Remove all non-digit characters
+    const numericValue = input.replace(/[^0-9]/g, "");
+    
+    if (numericValue === "") {
+      setDisplayValue("");
+      onChange(0);
+    } else {
+      const num = parseInt(numericValue, 10);
+      setDisplayValue(formatIndianNumber(num));
+      onChange(num);
+    }
+  };
+  
+  const handleFocus = (e) => {
+    // Select all text on focus for easy editing
+    e.target.select();
+  };
+  
+  return (
+    <Input
+      type="text"
+      value={displayValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      disabled={disabled}
+      className={className}
+      placeholder={placeholder || "0"}
+    />
+  );
 };
 
 // Protected Route
@@ -2846,9 +2899,9 @@ const ProjectCostsPage = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
                   <Label className="form-label">1. Buildings Cost</Label>
-                  <Input
-                    type="number"
+                  <CurrencyInput
                     value={estimatedDevCost.buildings_cost}
+                    onChange={() => {}}
                     disabled
                     className="bg-slate-100 font-medium"
                   />
@@ -2856,9 +2909,9 @@ const ProjectCostsPage = () => {
                 </div>
                 <div>
                   <Label className="form-label">2. Infrastructure Cost</Label>
-                  <Input
-                    type="number"
+                  <CurrencyInput
                     value={estimatedDevCost.infrastructure_cost}
+                    onChange={() => {}}
                     disabled
                     className="bg-slate-100 font-medium"
                   />
@@ -2866,20 +2919,18 @@ const ProjectCostsPage = () => {
                 </div>
                 <div>
                   <Label className="form-label">3. Consultants Fee</Label>
-                  <Input
-                    type="number"
+                  <CurrencyInput
                     value={estimatedDevCost.consultants_fee}
-                    onChange={(e) => handleEstimatedChange("consultants_fee", e.target.value)}
+                    onChange={(val) => handleEstimatedChange("consultants_fee", val)}
                     disabled={estimatedDevCost.is_locked}
                   />
                   <p className="text-xs text-slate-500 mt-1">Manual input</p>
                 </div>
                 <div>
                   <Label className="form-label">4. Cost of Machineries</Label>
-                  <Input
-                    type="number"
+                  <CurrencyInput
                     value={estimatedDevCost.machinery_cost}
-                    onChange={(e) => handleEstimatedChange("machinery_cost", e.target.value)}
+                    onChange={(val) => handleEstimatedChange("machinery_cost", val)}
                     disabled={estimatedDevCost.is_locked}
                   />
                   <p className="text-xs text-slate-500 mt-1">Manual input</p>
@@ -2911,10 +2962,9 @@ const ProjectCostsPage = () => {
             <CardContent className="space-y-4">
               <div>
                 <Label className="form-label">Estimated Land Cost (₹)</Label>
-                <Input
-                  type="number"
+                <CurrencyInput
                   value={cost.estimated_land_cost}
-                  onChange={(e) => handleChange("estimated_land_cost", e.target.value)}
+                  onChange={(val) => handleChange("estimated_land_cost", val)}
                 />
               </div>
             </CardContent>
@@ -2929,27 +2979,27 @@ const ProjectCostsPage = () => {
             <CardContent className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="form-label text-xs">Land Acquisition</Label>
-                <Input type="number" value={cost.land_acquisition_cost} onChange={(e) => handleChange("land_acquisition_cost", e.target.value)} />
+                <CurrencyInput value={cost.land_acquisition_cost} onChange={(val) => handleChange("land_acquisition_cost", val)} />
               </div>
               <div>
                 <Label className="form-label text-xs">Dev. Rights Premium</Label>
-                <Input type="number" value={cost.development_rights_premium} onChange={(e) => handleChange("development_rights_premium", e.target.value)} />
+                <CurrencyInput value={cost.development_rights_premium} onChange={(val) => handleChange("development_rights_premium", val)} />
               </div>
               <div>
                 <Label className="form-label text-xs">TDR Cost</Label>
-                <Input type="number" value={cost.tdr_cost} onChange={(e) => handleChange("tdr_cost", e.target.value)} />
+                <CurrencyInput value={cost.tdr_cost} onChange={(val) => handleChange("tdr_cost", val)} />
               </div>
               <div>
                 <Label className="form-label text-xs">Stamp Duty</Label>
-                <Input type="number" value={cost.stamp_duty} onChange={(e) => handleChange("stamp_duty", e.target.value)} />
+                <CurrencyInput value={cost.stamp_duty} onChange={(val) => handleChange("stamp_duty", val)} />
               </div>
               <div>
                 <Label className="form-label text-xs">Govt. Charges</Label>
-                <Input type="number" value={cost.government_charges} onChange={(e) => handleChange("government_charges", e.target.value)} />
+                <CurrencyInput value={cost.government_charges} onChange={(val) => handleChange("government_charges", val)} />
               </div>
               <div>
                 <Label className="form-label text-xs">Encumbrance Removal</Label>
-                <Input type="number" value={cost.encumbrance_removal} onChange={(e) => handleChange("encumbrance_removal", e.target.value)} />
+                <CurrencyInput value={cost.encumbrance_removal} onChange={(val) => handleChange("encumbrance_removal", val)} />
               </div>
             </CardContent>
           </Card>
@@ -2971,9 +3021,9 @@ const ProjectCostsPage = () => {
             <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
                 <Label className="form-label text-xs">Construction</Label>
-                <Input 
-                  type="number" 
+                <CurrencyInput 
                   value={actualCosts.construction_cost} 
+                  onChange={() => {}}
                   disabled 
                   className="bg-green-50 border-green-200 font-medium"
                 />
@@ -2983,9 +3033,9 @@ const ProjectCostsPage = () => {
               </div>
               <div>
                 <Label className="form-label text-xs">Infrastructure</Label>
-                <Input 
-                  type="number" 
+                <CurrencyInput 
                   value={actualCosts.infrastructure_cost} 
+                  onChange={() => {}}
                   disabled 
                   className="bg-green-50 border-green-200 font-medium"
                 />
@@ -2995,15 +3045,15 @@ const ProjectCostsPage = () => {
               </div>
               <div>
                 <Label className="form-label text-xs">Equipment</Label>
-                <Input type="number" value={cost.equipment_cost} onChange={(e) => handleChange("equipment_cost", e.target.value)} />
+                <CurrencyInput value={cost.equipment_cost} onChange={(val) => handleChange("equipment_cost", val)} />
               </div>
               <div>
                 <Label className="form-label text-xs">Taxes & Statutory</Label>
-                <Input type="number" value={cost.taxes_statutory} onChange={(e) => handleChange("taxes_statutory", e.target.value)} />
+                <CurrencyInput value={cost.taxes_statutory} onChange={(val) => handleChange("taxes_statutory", val)} />
               </div>
               <div>
                 <Label className="form-label text-xs">Finance Cost</Label>
-                <Input type="number" value={cost.finance_cost} onChange={(e) => handleChange("finance_cost", e.target.value)} />
+                <CurrencyInput value={cost.finance_cost} onChange={(val) => handleChange("finance_cost", val)} />
               </div>
             </CardContent>
           </Card>
