@@ -3636,8 +3636,27 @@ const ImportPage = () => {
     }
   };
 
-  const downloadTemplate = () => {
-    window.open(`${API}/import/sales-template`, "_blank");
+  const downloadTemplate = async () => {
+    try {
+      const response = await axios.get(`${API}/import/sales-template`, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'sales_template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Template downloaded successfully");
+    } catch (err) {
+      toast.error("Failed to download template");
+      console.error(err);
+    }
   };
 
   return (
