@@ -3154,6 +3154,18 @@ const SalesPage = () => {
   const totalReceived = sales.reduce((sum, s) => sum + s.amount_received, 0);
   const totalReceivable = sales.reduce((sum, s) => sum + s.balance_receivable, 0);
 
+  // Separate sold and unsold inventory
+  const soldUnits = sales.filter(s => s.status === "sold" || s.buyer_name);
+  const unsoldUnits = sales.filter(s => s.status === "unsold" || (!s.buyer_name && !s.status));
+  
+  const soldValue = soldUnits.reduce((sum, s) => sum + s.sale_value, 0);
+  const unsoldValue = unsoldUnits.reduce((sum, s) => sum + s.sale_value, 0);
+
+  const [activeTab, setActiveTab] = useState("all");
+
+  const filteredSales = activeTab === "all" ? sales : 
+                        activeTab === "sold" ? soldUnits : unsoldUnits;
+
   return (
     <Layout>
       <div className="space-y-6" data-testid="sales-page">
@@ -3196,8 +3208,8 @@ const SalesPage = () => {
                     <Input type="number" value={form.carpet_area} onChange={(e) => setForm(f => ({ ...f, carpet_area: parseFloat(e.target.value) || 0 }))} />
                   </div>
                   <div>
-                    <Label className="form-label">Buyer Name</Label>
-                    <Input value={form.buyer_name} onChange={(e) => setForm(f => ({ ...f, buyer_name: e.target.value }))} />
+                    <Label className="form-label">Buyer Name <span className="text-slate-400 text-xs">(leave blank for unsold)</span></Label>
+                    <Input value={form.buyer_name} onChange={(e) => setForm(f => ({ ...f, buyer_name: e.target.value }))} placeholder="Leave blank if unsold" />
                   </div>
                   <div>
                     <Label className="form-label">Sale Value (₹)</Label>
@@ -3222,31 +3234,72 @@ const SalesPage = () => {
         </div>
 
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card className="bg-blue-50">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card className="bg-slate-50">
             <CardContent className="p-4">
-              <p className="text-sm text-blue-600">Total Sales Value</p>
-              <p className="text-xl font-bold text-blue-900 currency">{formatCurrency(totalSales)}</p>
+              <p className="text-sm text-slate-600">Total Units</p>
+              <p className="text-xl font-bold text-slate-900">{sales.length}</p>
             </CardContent>
           </Card>
           <Card className="bg-emerald-50">
             <CardContent className="p-4">
-              <p className="text-sm text-emerald-600">Amount Received</p>
-              <p className="text-xl font-bold text-emerald-900 currency">{formatCurrency(totalReceived)}</p>
+              <p className="text-sm text-emerald-600">Sold Units</p>
+              <p className="text-xl font-bold text-emerald-900">{soldUnits.length}</p>
+              <p className="text-xs text-emerald-600">{formatCurrency(soldValue)}</p>
             </CardContent>
           </Card>
           <Card className="bg-amber-50">
             <CardContent className="p-4">
-              <p className="text-sm text-amber-600">Receivables</p>
-              <p className="text-xl font-bold text-amber-900 currency">{formatCurrency(totalReceivable)}</p>
+              <p className="text-sm text-amber-600">Unsold Inventory</p>
+              <p className="text-xl font-bold text-amber-900">{unsoldUnits.length}</p>
+              <p className="text-xs text-amber-600">{formatCurrency(unsoldValue)}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-blue-50">
+            <CardContent className="p-4">
+              <p className="text-sm text-blue-600">Amount Received</p>
+              <p className="text-xl font-bold text-blue-900 currency">{formatCurrency(totalReceived)}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-red-50">
+            <CardContent className="p-4">
+              <p className="text-sm text-red-600">Receivables</p>
+              <p className="text-xl font-bold text-red-900 currency">{formatCurrency(totalReceivable)}</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Sales Table */}
+        {/* Sales Table with Tabs */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Unit Sales ({sales.length} records)</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Unit Sales</CardTitle>
+              <div className="flex gap-2">
+                <Button 
+                  variant={activeTab === "all" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setActiveTab("all")}
+                >
+                  All ({sales.length})
+                </Button>
+                <Button 
+                  variant={activeTab === "sold" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setActiveTab("sold")}
+                  className={activeTab === "sold" ? "bg-emerald-600" : ""}
+                >
+                  Sold ({soldUnits.length})
+                </Button>
+                <Button 
+                  variant={activeTab === "unsold" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setActiveTab("unsold")}
+                  className={activeTab === "unsold" ? "bg-amber-600" : ""}
+                >
+                  Unsold ({unsoldUnits.length})
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[400px]">
@@ -3255,6 +3308,7 @@ const SalesPage = () => {
                   <TableRow>
                     <TableHead>Unit</TableHead>
                     <TableHead>Building</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Buyer</TableHead>
                     <TableHead className="text-right">Area</TableHead>
                     <TableHead className="text-right">Sale Value</TableHead>
@@ -3264,11 +3318,18 @@ const SalesPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sales.map((sale) => (
-                    <TableRow key={sale.sale_id}>
+                  {filteredSales.map((sale) => (
+                    <TableRow key={sale.sale_id} className={!sale.buyer_name ? "bg-amber-50" : ""}>
                       <TableCell className="font-medium">{sale.unit_number}</TableCell>
                       <TableCell>{sale.building_name}</TableCell>
-                      <TableCell>{sale.buyer_name || "-"}</TableCell>
+                      <TableCell>
+                        {sale.buyer_name ? (
+                          <Badge className="bg-emerald-100 text-emerald-700">Sold</Badge>
+                        ) : (
+                          <Badge className="bg-amber-100 text-amber-700">Unsold</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{sale.buyer_name || <span className="text-slate-400 italic">Available</span>}</TableCell>
                       <TableCell className="text-right">{formatNumber(sale.carpet_area, 0)}</TableCell>
                       <TableCell className="text-right currency">{formatCurrency(sale.sale_value)}</TableCell>
                       <TableCell className="text-right currency text-emerald-600">{formatCurrency(sale.amount_received)}</TableCell>
@@ -3667,11 +3728,12 @@ const ImportPage = () => {
       });
       setResult(res.data);
       if (res.data.created > 0) {
-        toast.success(`Imported ${res.data.created} sales records`);
+        toast.success(res.data.message || `Imported ${res.data.created} sales records`);
       }
       if (res.data.errors?.length > 0) {
         toast.warning(`${res.data.errors.length} errors occurred`);
       }
+      setFile(null);
     } catch (err) {
       toast.error("Failed to import file");
     } finally {
@@ -3793,20 +3855,39 @@ const ImportPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                 <div className="p-4 bg-slate-50 rounded-lg">
-                  <p className="text-sm text-slate-600">Total Rows</p>
-                  <p className="text-2xl font-bold">{result.total_rows || 0}</p>
+                  <p className="text-sm text-slate-600">Previous Records</p>
+                  <p className="text-2xl font-bold text-slate-700">{result.deleted || 0}</p>
+                  <p className="text-xs text-slate-500">deleted</p>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-600">Total Rows</p>
+                  <p className="text-2xl font-bold text-blue-700">{result.total_rows || 0}</p>
+                  <p className="text-xs text-blue-500">in file</p>
                 </div>
                 <div className="p-4 bg-emerald-50 rounded-lg">
-                  <p className="text-sm text-emerald-600">Imported</p>
-                  <p className="text-2xl font-bold text-emerald-700">{result.created || 0}</p>
+                  <p className="text-sm text-emerald-600">Sold Units</p>
+                  <p className="text-2xl font-bold text-emerald-700">{result.sold_units || 0}</p>
+                  <p className="text-xs text-emerald-500">with buyer name</p>
+                </div>
+                <div className="p-4 bg-amber-50 rounded-lg">
+                  <p className="text-sm text-amber-600">Unsold Units</p>
+                  <p className="text-2xl font-bold text-amber-700">{result.unsold_units || 0}</p>
+                  <p className="text-xs text-amber-500">available inventory</p>
                 </div>
                 <div className="p-4 bg-rose-50 rounded-lg">
                   <p className="text-sm text-rose-600">Errors</p>
                   <p className="text-2xl font-bold text-rose-700">{result.errors?.length || 0}</p>
+                  <p className="text-xs text-rose-500">skipped rows</p>
                 </div>
               </div>
+              
+              {result.message && (
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200 mb-4">
+                  <p className="text-sm text-green-700">{result.message}</p>
+                </div>
+              )}
 
               {result.errors?.length > 0 && (
                 <div>

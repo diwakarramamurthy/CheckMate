@@ -1986,7 +1986,7 @@ async def import_sales_excel(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Import unit sales from Excel file"""
+    """Import unit sales from Excel file - replaces all existing data for the project"""
     import openpyxl
     from io import BytesIO
     
@@ -2018,7 +2018,12 @@ async def import_sales_excel(
                 return headers[alias]
         return None
     
+    # DELETE all existing sales for this project before importing new data
+    delete_result = await db.unit_sales.delete_many({"project_id": project_id})
+    deleted_count = delete_result.deleted_count
+    
     created = 0
+    unsold_count = 0
     errors = []
     
     # Get buildings for this project to map building names to IDs
@@ -2044,7 +2049,7 @@ async def import_sales_excel(
             carpet_area = float(ws.cell(row=row, column=area_col).value or 0) if area_col else 0
             sale_value = float(ws.cell(row=row, column=value_col).value or 0) if value_col else 0
             amount_received = float(ws.cell(row=row, column=received_col).value or 0) if received_col else 0
-            buyer_name = str(ws.cell(row=row, column=buyer_col).value or "") if buyer_col else ""
+            buyer_name = str(ws.cell(row=row, column=buyer_col).value or "").strip() if buyer_col else ""
             agreement_date = ws.cell(row=row, column=date_col).value if date_col else None
             
             if agreement_date and hasattr(agreement_date, 'isoformat'):
@@ -2059,6 +2064,13 @@ async def import_sales_excel(
             now = datetime.now(timezone.utc).isoformat()
             balance = sale_value - amount_received
             
+            # Determine sale status: if buyer_name is blank, it's unsold inventory
+            is_sold = bool(buyer_name)
+            status = "sold" if is_sold else "unsold"
+            
+            if not is_sold:
+                unsold_count += 1
+            
             sale_doc = {
                 "sale_id": sale_id,
                 "project_id": project_id,
@@ -2071,14 +2083,24 @@ async def import_sales_excel(
                 "buyer_name": buyer_name,
                 "agreement_date": agreement_date,
                 "balance_receivable": balance,
-                "created_at": now
+                "status": status,  # "sold" or "unsold"
+                "created_at": now,
+                "updated_at": now
             }
             await db.unit_sales.insert_one(sale_doc)
             created += 1
         except Exception as e:
             errors.append({"row": row, "error": str(e)})
     
-    return {"created": created, "errors": errors, "total_rows": ws.max_row - 1}
+    return {
+        "deleted": deleted_count,
+        "created": created,
+        "sold_units": created - unsold_count,
+        "unsold_units": unsold_count,
+        "errors": errors,
+        "total_rows": ws.max_row - 1,
+        "message": f"Replaced {deleted_count} existing records with {created} new records ({unsold_count} unsold units)"
+    }
 
 @api_router.get("/import/sales-template")
 async def get_sales_template():
