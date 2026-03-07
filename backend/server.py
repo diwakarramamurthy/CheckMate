@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
@@ -1228,14 +1228,17 @@ def calculate_recalibrated_completion(activities_data: dict, template_categories
 # Save detailed construction progress with N/A support
 @api_router.post("/construction-progress/detailed")
 async def create_detailed_construction_progress(
-    building_id: str,
-    quarter: str,
-    year: int,
-    tower_activities: Dict[str, Any],
-    number_of_floors: int = 1,
-    current_user: dict = Depends(get_current_user)
+    building_id: str = Query(...),
+    quarter: str = Query(...),
+    year: int = Query(...),
+    number_of_floors: int = Query(1),
+    current_user: dict = Depends(get_current_user),
+    request: Request = None
 ):
     """Save detailed tower construction progress with N/A support and weightage recalibration"""
+    # Get tower_activities from request body
+    tower_activities = await request.json() if request else {}
+    
     # Get building to get project_id
     building = await db.buildings.find_one({"building_id": building_id})
     if not building:
@@ -1282,13 +1285,16 @@ async def create_detailed_construction_progress(
 
 @api_router.post("/infrastructure-progress")
 async def create_infrastructure_progress(
-    project_id: str,
-    quarter: str,
-    year: int,
-    activities: Dict[str, Any],
-    current_user: dict = Depends(get_current_user)
+    project_id: str = Query(...),
+    quarter: str = Query(...),
+    year: int = Query(...),
+    current_user: dict = Depends(get_current_user),
+    request: Request = None
 ):
     """Save infrastructure works progress with N/A support and recalibration"""
+    # Get activities from request body
+    activities = await request.json() if request else {}
+    
     # Get infrastructure template
     infrastructure_template = [
         {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 25.0},

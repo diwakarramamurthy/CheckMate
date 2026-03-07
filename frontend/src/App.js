@@ -2015,23 +2015,23 @@ const ConstructionProgressPage = () => {
     setSaving(true);
     try {
       // Save tower progress
-      await axios.post(`${API}/construction-progress/detailed`, null, {
-        params: {
-          building_id: selectedBuilding,
-          quarter,
-          year,
-          number_of_floors: buildings.find(b => b.building_id === selectedBuilding)?.residential_floors || 1
-        },
-        data: towerActivities,
-        headers: { 'Content-Type': 'application/json' }
+      const towerParams = new URLSearchParams({
+        building_id: selectedBuilding,
+        quarter,
+        year: year.toString(),
+        number_of_floors: (buildings.find(b => b.building_id === selectedBuilding)?.residential_floors || 1).toString()
       });
+      
+      await axios.post(`${API}/construction-progress/detailed?${towerParams.toString()}`, towerActivities);
 
       // Save infrastructure progress
-      await axios.post(`${API}/infrastructure-progress`, null, {
-        params: { project_id: selectedProject, quarter, year },
-        data: infraActivities,
-        headers: { 'Content-Type': 'application/json' }
+      const infraParams = new URLSearchParams({
+        project_id: selectedProject,
+        quarter,
+        year: year.toString()
       });
+      
+      await axios.post(`${API}/infrastructure-progress?${infraParams.toString()}`, infraActivities);
 
       toast.success("Progress saved successfully");
     } catch (err) {
