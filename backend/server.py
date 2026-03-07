@@ -77,22 +77,82 @@ class ProjectBase(BaseModel):
     project_address: str
     survey_number: Optional[str] = None
     plot_number: Optional[str] = None
+    chalta_number: Optional[str] = None  # PTS/Chalta No for RERA forms
     village: Optional[str] = None
     taluka: Optional[str] = None
     district: Optional[str] = None
+    ward: Optional[str] = None  # Ward number
+    municipality: Optional[str] = None  # Municipality name
     pin_code: Optional[str] = None
     plot_area: Optional[float] = None
     total_built_up_area: Optional[float] = None
+    
+    # Project boundaries (for RERA forms)
+    boundary_north: Optional[str] = None
+    boundary_south: Optional[str] = None
+    boundary_east: Optional[str] = None
+    boundary_west: Optional[str] = None
+    
+    # RERA Registration details
+    rera_registration_date: Optional[str] = None
+    rera_validity_date: Optional[str] = None
+    project_phase: Optional[str] = None  # Phase 1, Phase 2, etc.
+    
+    # Project timeline
     project_start_date: Optional[str] = None
     expected_completion_date: Optional[str] = None
+    
+    # Designated Bank Account (for RERA compliance)
+    designated_bank_name: Optional[str] = None
+    designated_account_number: Optional[str] = None
+    designated_ifsc_code: Optional[str] = None
+    
+    # Professional details - Architect
     architect_name: Optional[str] = None
     architect_license: Optional[str] = None
+    architect_address: Optional[str] = None
+    architect_contact: Optional[str] = None
+    architect_email: Optional[str] = None
+    
+    # Professional details - Engineer
     engineer_name: Optional[str] = None
     engineer_license: Optional[str] = None
+    engineer_address: Optional[str] = None
+    engineer_contact: Optional[str] = None
+    engineer_email: Optional[str] = None
+    
+    # Professional details - Structural Consultant
+    structural_consultant_name: Optional[str] = None
+    structural_consultant_license: Optional[str] = None
+    
+    # Professional details - MEP Consultant
+    mep_consultant_name: Optional[str] = None
+    mep_consultant_license: Optional[str] = None
+    
+    # Professional details - Site Supervisor
+    site_supervisor_name: Optional[str] = None
+    
+    # Professional details - Quantity Surveyor
+    quantity_surveyor_name: Optional[str] = None
+    
+    # Professional details - CA
     ca_name: Optional[str] = None
     ca_firm_name: Optional[str] = None
+    ca_membership_number: Optional[str] = None
+    ca_address: Optional[str] = None
+    ca_contact: Optional[str] = None
+    ca_email: Optional[str] = None
+    
+    # Professional details - Auditor
     auditor_name: Optional[str] = None
     auditor_firm_name: Optional[str] = None
+    auditor_membership_number: Optional[str] = None
+    auditor_address: Optional[str] = None
+    auditor_contact: Optional[str] = None
+    auditor_email: Optional[str] = None
+    
+    # Planning Authority
+    planning_authority_name: Optional[str] = None
 
 class ProjectCreate(ProjectBase):
     pass
@@ -154,6 +214,50 @@ class BuildingResponse(BuildingBase):
     created_at: str
     total_parking_floors: int = 0
 
+# FORM-1 Table A: Building-wise construction activities (RERA standard)
+class Form1TableAActivities(BaseModel):
+    excavation: float = 0
+    basement_plinth: float = 0  # Basement(s) and Plinth
+    podiums: float = 0
+    stilt_floor: float = 0
+    super_structure_slabs: float = 0  # Slabs of Super Structure
+    internal_works: float = 0  # Internal walls, plaster, flooring within flats
+    doors_windows_fittings: float = 0  # Doors, Windows, Sanitary, Electrical within flats
+    staircases_lifts_lobbies: float = 0  # Staircases, Lift wells, Lobbies, OH/UG tanks
+    external_finishing: float = 0  # External plumbing, plaster, elevation, terrace waterproofing
+    final_installations: float = 0  # Lifts, pumps, fire fighting, electrical, compound wall etc.
+
+# FORM-1 Table B: Common Development Works (entire phase)
+class Form1TableBWorks(BaseModel):
+    internal_roads_footpaths: float = 0
+    internal_roads_proposed: bool = True
+    water_supply: float = 0
+    water_supply_proposed: bool = True
+    sewerage: float = 0  # Chamber, lines, Septic Tank, STP
+    sewerage_proposed: bool = True
+    storm_water_drains: float = 0
+    storm_water_proposed: bool = True
+    landscaping_trees: float = 0
+    landscaping_proposed: bool = True
+    street_lighting: float = 0
+    street_lighting_proposed: bool = True
+    community_buildings: float = 0
+    community_buildings_proposed: bool = False
+    sewage_treatment: float = 0
+    sewage_treatment_proposed: bool = True
+    solid_waste_management: float = 0
+    solid_waste_proposed: bool = True
+    rainwater_harvesting: float = 0
+    rainwater_proposed: bool = True
+    energy_management: float = 0
+    energy_management_proposed: bool = False
+    fire_safety: float = 0
+    fire_safety_proposed: bool = True
+    electrical_infrastructure: float = 0  # Meter room, substation, receiving station
+    electrical_proposed: bool = True
+    other_works: float = 0
+    other_works_details: Optional[str] = None
+
 class ConstructionActivityBase(BaseModel):
     activity_name: str
     weightage: float
@@ -165,6 +269,8 @@ class ConstructionProgressBase(BaseModel):
     year: int
     activities: List[ConstructionActivityBase]
     overall_completion: float = 0
+    # FORM-1 Table A structured activities
+    form1_table_a: Optional[Form1TableAActivities] = None
 
 class ConstructionProgressCreate(ConstructionProgressBase):
     pass
@@ -175,21 +281,94 @@ class ConstructionProgressResponse(ConstructionProgressBase):
     project_id: str
     created_at: str
 
+# Project-level Common Development Works Progress (Form-1 Table B)
+class CommonDevelopmentWorksBase(BaseModel):
+    project_id: str
+    quarter: str
+    year: int
+    works: Form1TableBWorks
+    overall_completion: float = 0
+
+class CommonDevelopmentWorksCreate(CommonDevelopmentWorksBase):
+    pass
+
+class CommonDevelopmentWorksResponse(CommonDevelopmentWorksBase):
+    model_config = ConfigDict(extra="ignore")
+    works_id: str
+    created_at: str
+
+# FORM-4: Detailed Project Cost structure matching CA Certificate format
 class ProjectCostBase(BaseModel):
     project_id: str
     quarter: str
     year: int
+    
+    # LAND COST (Section 1.i in Form-4)
+    # a. Land acquisition cost
     land_acquisition_cost: float = 0
+    land_acquisition_estimated: float = 0
+    land_legal_cost: float = 0
+    land_interest_cost: float = 0
+    
+    # b. Development rights premium (FAR, additional FAR, fungible area)
     development_rights_premium: float = 0
+    development_rights_estimated: float = 0
+    
+    # c. TDR cost
     tdr_cost: float = 0
+    tdr_estimated: float = 0
+    
+    # d. Stamp duty, transfer charges, registration fees
     stamp_duty: float = 0
+    stamp_duty_estimated: float = 0
+    
+    # e. Government charges (to any statutory authority)
     government_charges: float = 0
-    encumbrance_removal: float = 0
-    construction_cost: float = 0
+    government_charges_estimated: float = 0
+    
+    # f. Land premium (for redevelopment projects)
+    land_premium_redevelopment: float = 0
+    land_premium_estimated: float = 0
+    
+    # g. Rehabilitation scheme costs (if applicable)
+    rehab_construction_cost: float = 0
+    rehab_construction_estimated: float = 0
+    rehab_transit_accommodation: float = 0
+    rehab_clearance_cost: float = 0
+    rehab_asr_premium: float = 0
+    
+    # DEVELOPMENT COST / CONSTRUCTION COST (Section 1.ii in Form-4)
+    # a. Construction cost (as certified by Engineer)
+    construction_cost_estimated: float = 0
+    construction_cost_actual: float = 0
+    
+    # On-site expenditure
+    onsite_salaries: float = 0
+    onsite_consultants_fees: float = 0
+    onsite_site_overheads: float = 0
+    onsite_services_cost: float = 0  # Water, electricity, sewerage, drainage, roads
+    onsite_machinery_equipment: float = 0
+    onsite_consumables: float = 0
+    
+    # Off-site expenditure
+    offsite_expenditure: float = 0
+    
+    # b. Taxes, cess, fees to statutory authority
+    taxes_statutory: float = 0
+    taxes_statutory_estimated: float = 0
+    
+    # c. Finance cost (loans, interest)
+    finance_cost: float = 0
+    finance_cost_estimated: float = 0
+    
+    # Extra/Additional items not in original estimate (Annexure A)
+    extra_items_cost: float = 0
+    extra_items_details: Optional[str] = None
+    
+    # Legacy fields for backward compatibility
     infrastructure_cost: float = 0
     equipment_cost: float = 0
-    taxes_statutory: float = 0
-    finance_cost: float = 0
+    encumbrance_removal: float = 0
     estimated_land_cost: float = 0
     estimated_development_cost: float = 0
 
@@ -200,18 +379,24 @@ class ProjectCostResponse(ProjectCostBase):
     model_config = ConfigDict(extra="ignore")
     cost_id: str
     total_land_cost: float = 0
+    total_land_cost_estimated: float = 0
     total_development_cost: float = 0
+    total_development_cost_estimated: float = 0
     total_estimated_cost: float = 0
     total_cost_incurred: float = 0
     balance_cost: float = 0
+    cost_completion_percentage: float = 0
     created_at: str
 
+# FORM-3: Building-wise cost tracking (Engineer's Certificate)
 class BuildingCostBase(BaseModel):
     building_id: str
     quarter: str
     year: int
     estimated_cost: float = 0
     cost_incurred: float = 0
+    extra_items_cost: float = 0  # Annexure A items
+    extra_items_details: Optional[str] = None
 
 class BuildingCostCreate(BuildingCostBase):
     pass
@@ -224,6 +409,7 @@ class BuildingCostResponse(BuildingCostBase):
     balance_cost: float = 0
     created_at: str
 
+# FORM-5 & Annexure A: Sales and Receivables tracking
 class UnitSaleBase(BaseModel):
     unit_number: str
     building_id: str
@@ -233,6 +419,8 @@ class UnitSaleBase(BaseModel):
     amount_received: float = 0
     buyer_name: Optional[str] = None
     agreement_date: Optional[str] = None
+    allotment_letter_date: Optional[str] = None  # For Annexure A
+    is_sold: bool = True  # False for unsold inventory
 
 class UnitSaleCreate(UnitSaleBase):
     project_id: str
@@ -244,12 +432,51 @@ class UnitSaleResponse(UnitSaleBase):
     balance_receivable: float = 0
     created_at: str
 
+# FORM-5: Financial Summary for ongoing projects
+class FinancialSummaryBase(BaseModel):
+    project_id: str
+    quarter: str
+    year: int
+    
+    # Designated Account tracking
+    designated_account_opening_balance: float = 0
+    amount_deposited_this_quarter: float = 0
+    amount_withdrawn_this_quarter: float = 0
+    designated_account_closing_balance: float = 0
+    
+    # Total withdrawals
+    total_amount_withdrawn_till_date: float = 0
+    
+    # Receivables calculation
+    total_balance_receivable_sold: float = 0  # From sold apartments
+    unsold_area_sqm: float = 0
+    asr_rate_per_sqm: float = 0  # Ready Reckoner / ASR rate
+    unsold_inventory_value: float = 0  # Calculated: unsold_area * asr_rate
+    total_estimated_receivables: float = 0  # sold receivables + unsold value
+    
+    # Deposit calculation (70% or 100%)
+    deposit_percentage: int = 70  # 70 or 100
+    amount_to_deposit: float = 0
+    
+    # For FORM-6 Annual report
+    amount_collected_this_year: float = 0
+    amount_collected_till_date: float = 0
+    amount_withdrawn_this_year: float = 0
+
+class FinancialSummaryCreate(FinancialSummaryBase):
+    pass
+
+class FinancialSummaryResponse(FinancialSummaryBase):
+    model_config = ConfigDict(extra="ignore")
+    summary_id: str
+    created_at: str
+
 class QuarterlyReportBase(BaseModel):
     project_id: str
     quarter: str
     year: int
     report_date: str
-    status: str = "draft"
+    report_status: str = "draft"
 
 class QuarterlyReportCreate(QuarterlyReportBase):
     pass
@@ -690,20 +917,67 @@ async def get_construction_progress(
 async def get_default_activities():
     return DEFAULT_ACTIVITIES
 
+# Get FORM-1 Table A activity template (RERA standard)
+@api_router.get("/construction-progress/form1-table-a-template")
+async def get_form1_table_a_template():
+    """Returns the FORM-1 Table A activity structure with descriptions"""
+    return {
+        "activities": [
+            {"field": "excavation", "label": "Excavation", "weightage": 5, "description": "Site excavation and preparation"},
+            {"field": "basement_plinth", "label": "Basement(s) and Plinth", "weightage": 10, "description": "Basement construction and plinth level"},
+            {"field": "podiums", "label": "Podiums", "weightage": 5, "description": "Podium floors construction"},
+            {"field": "stilt_floor", "label": "Stilt Floor", "weightage": 5, "description": "Stilt parking level"},
+            {"field": "super_structure_slabs", "label": "Slabs of Super Structure", "weightage": 20, "description": "RCC slabs for all floors"},
+            {"field": "internal_works", "label": "Internal Works", "weightage": 12, "description": "Internal walls, plaster, flooring within flats/premises"},
+            {"field": "doors_windows_fittings", "label": "Doors, Windows & Fittings", "weightage": 10, "description": "Doors, windows, sanitary fittings, electrical fittings within flat/premises"},
+            {"field": "staircases_lifts_lobbies", "label": "Staircases, Lifts & Tanks", "weightage": 10, "description": "Staircases, lift wells, lobbies, overhead and underground water tanks"},
+            {"field": "external_finishing", "label": "External Finishing", "weightage": 10, "description": "External plumbing, plaster, elevation, terrace waterproofing"},
+            {"field": "final_installations", "label": "Final Installations", "weightage": 13, "description": "Lifts, pumps, fire fighting, electrical to common areas, compound wall, occupation certificate requirements"}
+        ],
+        "total_weightage": 100
+    }
+
 # =========================
-# PROJECT COST ROUTES
+# PROJECT COST ROUTES (FORM-4 CA Certificate)
 # =========================
 
 @api_router.post("/project-costs", response_model=ProjectCostResponse)
 async def create_project_cost(cost: ProjectCostCreate, current_user: dict = Depends(get_current_user)):
-    # Calculate totals
-    total_land = (cost.land_acquisition_cost + cost.development_rights_premium + 
-                  cost.tdr_cost + cost.stamp_duty + cost.government_charges + cost.encumbrance_removal)
-    total_dev = (cost.construction_cost + cost.infrastructure_cost + cost.equipment_cost + 
-                 cost.taxes_statutory + cost.finance_cost)
-    total_estimated = cost.estimated_land_cost + cost.estimated_development_cost
+    # Calculate Land Cost totals (Section 1.i in Form-4)
+    total_land = (
+        cost.land_acquisition_cost + cost.land_legal_cost + cost.land_interest_cost +
+        cost.development_rights_premium + cost.tdr_cost + cost.stamp_duty + 
+        cost.government_charges + cost.land_premium_redevelopment +
+        cost.rehab_construction_cost + cost.rehab_transit_accommodation + 
+        cost.rehab_clearance_cost + cost.rehab_asr_premium
+    )
+    
+    total_land_estimated = (
+        cost.land_acquisition_estimated + cost.development_rights_estimated +
+        cost.tdr_estimated + cost.stamp_duty_estimated + cost.government_charges_estimated +
+        cost.land_premium_estimated + cost.rehab_construction_estimated
+    )
+    
+    # Calculate Development/Construction Cost totals (Section 1.ii in Form-4)
+    total_dev = (
+        cost.construction_cost_actual + cost.onsite_salaries + cost.onsite_consultants_fees +
+        cost.onsite_site_overheads + cost.onsite_services_cost + cost.onsite_machinery_equipment +
+        cost.onsite_consumables + cost.offsite_expenditure + cost.taxes_statutory + cost.finance_cost +
+        cost.extra_items_cost
+    )
+    
+    total_dev_estimated = cost.construction_cost_estimated + cost.taxes_statutory_estimated + cost.finance_cost_estimated
+    
+    # Legacy totals for backward compatibility
+    total_estimated = total_land_estimated + total_dev_estimated
+    if total_estimated == 0:
+        total_estimated = cost.estimated_land_cost + cost.estimated_development_cost
+    
     total_incurred = total_land + total_dev
     balance = total_estimated - total_incurred
+    
+    # Cost completion percentage
+    cost_completion = (total_incurred / total_estimated * 100) if total_estimated > 0 else 0
     
     cost_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -711,10 +985,13 @@ async def create_project_cost(cost: ProjectCostCreate, current_user: dict = Depe
         "cost_id": cost_id,
         **cost.model_dump(),
         "total_land_cost": total_land,
+        "total_land_cost_estimated": total_land_estimated,
         "total_development_cost": total_dev,
+        "total_development_cost_estimated": total_dev_estimated,
         "total_estimated_cost": total_estimated,
         "total_cost_incurred": total_incurred,
         "balance_cost": balance,
+        "cost_completion_percentage": round(cost_completion, 2),
         "created_at": now
     }
     
@@ -845,6 +1122,163 @@ async def delete_unit_sale(sale_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Unit sale not found")
     return {"message": "Unit sale deleted"}
 
+# =========================
+# COMMON DEVELOPMENT WORKS (FORM-1 Table B)
+# =========================
+
+@api_router.post("/common-development-works", response_model=CommonDevelopmentWorksResponse)
+async def create_common_development_works(works: CommonDevelopmentWorksCreate, current_user: dict = Depends(get_current_user)):
+    works_data = works.works.model_dump()
+    
+    # Calculate overall completion based on proposed works
+    total_weight = 0
+    weighted_completion = 0
+    
+    work_items = [
+        ("internal_roads_footpaths", "internal_roads_proposed"),
+        ("water_supply", "water_supply_proposed"),
+        ("sewerage", "sewerage_proposed"),
+        ("storm_water_drains", "storm_water_proposed"),
+        ("landscaping_trees", "landscaping_proposed"),
+        ("street_lighting", "street_lighting_proposed"),
+        ("community_buildings", "community_buildings_proposed"),
+        ("sewage_treatment", "sewage_treatment_proposed"),
+        ("solid_waste_management", "solid_waste_proposed"),
+        ("rainwater_harvesting", "rainwater_proposed"),
+        ("energy_management", "energy_management_proposed"),
+        ("fire_safety", "fire_safety_proposed"),
+        ("electrical_infrastructure", "electrical_proposed"),
+    ]
+    
+    for completion_field, proposed_field in work_items:
+        if works_data.get(proposed_field, False):
+            total_weight += 1
+            weighted_completion += works_data.get(completion_field, 0)
+    
+    overall = (weighted_completion / total_weight) if total_weight > 0 else 0
+    
+    works_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    works_doc = {
+        "works_id": works_id,
+        "project_id": works.project_id,
+        "quarter": works.quarter,
+        "year": works.year,
+        "works": works_data,
+        "overall_completion": round(overall, 2),
+        "created_at": now
+    }
+    
+    await db.common_development_works.update_one(
+        {"project_id": works.project_id, "quarter": works.quarter, "year": works.year},
+        {"$set": works_doc},
+        upsert=True
+    )
+    
+    return CommonDevelopmentWorksResponse(**works_doc)
+
+@api_router.get("/common-development-works", response_model=List[CommonDevelopmentWorksResponse])
+async def get_common_development_works(
+    project_id: str = Query(...),
+    quarter: Optional[str] = None,
+    year: Optional[int] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"project_id": project_id}
+    if quarter:
+        query["quarter"] = quarter
+    if year:
+        query["year"] = year
+    
+    works = await db.common_development_works.find(query, {"_id": 0}).to_list(100)
+    return [CommonDevelopmentWorksResponse(**w) for w in works]
+
+@api_router.get("/common-development-works/latest/{project_id}", response_model=CommonDevelopmentWorksResponse)
+async def get_latest_common_development_works(project_id: str, current_user: dict = Depends(get_current_user)):
+    works = await db.common_development_works.find_one(
+        {"project_id": project_id},
+        {"_id": 0},
+        sort=[("year", -1), ("quarter", -1)]
+    )
+    if not works:
+        raise HTTPException(status_code=404, detail="No common development works data found")
+    return CommonDevelopmentWorksResponse(**works)
+
+# =========================
+# FINANCIAL SUMMARY (FORM-5)
+# =========================
+
+@api_router.post("/financial-summary", response_model=FinancialSummaryResponse)
+async def create_financial_summary(summary: FinancialSummaryCreate, current_user: dict = Depends(get_current_user)):
+    # Calculate unsold inventory value
+    unsold_value = summary.unsold_area_sqm * summary.asr_rate_per_sqm
+    
+    # Calculate total estimated receivables
+    total_receivables = summary.total_balance_receivable_sold + unsold_value
+    
+    # Determine deposit percentage and amount (Form-5 logic)
+    # Get project cost data
+    cost = await db.project_costs.find_one(
+        {"project_id": summary.project_id},
+        {"_id": 0},
+        sort=[("year", -1), ("quarter", -1)]
+    )
+    
+    balance_cost = cost.get("balance_cost", 0) if cost else 0
+    
+    # If receivables > balance cost, deposit 70%, else 100%
+    deposit_pct = 70 if total_receivables > balance_cost else 100
+    amount_to_deposit = total_receivables * deposit_pct / 100
+    
+    summary_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    summary_doc = {
+        "summary_id": summary_id,
+        **summary.model_dump(),
+        "unsold_inventory_value": unsold_value,
+        "total_estimated_receivables": total_receivables,
+        "deposit_percentage": deposit_pct,
+        "amount_to_deposit": amount_to_deposit,
+        "created_at": now
+    }
+    
+    await db.financial_summaries.update_one(
+        {"project_id": summary.project_id, "quarter": summary.quarter, "year": summary.year},
+        {"$set": summary_doc},
+        upsert=True
+    )
+    
+    return FinancialSummaryResponse(**summary_doc)
+
+@api_router.get("/financial-summary", response_model=List[FinancialSummaryResponse])
+async def get_financial_summaries(
+    project_id: str = Query(...),
+    quarter: Optional[str] = None,
+    year: Optional[int] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"project_id": project_id}
+    if quarter:
+        query["quarter"] = quarter
+    if year:
+        query["year"] = year
+    
+    summaries = await db.financial_summaries.find(query, {"_id": 0}).to_list(100)
+    return [FinancialSummaryResponse(**s) for s in summaries]
+
+@api_router.get("/financial-summary/latest/{project_id}", response_model=FinancialSummaryResponse)
+async def get_latest_financial_summary(project_id: str, current_user: dict = Depends(get_current_user)):
+    summary = await db.financial_summaries.find_one(
+        {"project_id": project_id},
+        {"_id": 0},
+        sort=[("year", -1), ("quarter", -1)]
+    )
+    if not summary:
+        raise HTTPException(status_code=404, detail="No financial summary data found")
+    return FinancialSummaryResponse(**summary)
+
 @api_router.post("/unit-sales/bulk", response_model=Dict[str, Any])
 async def bulk_create_unit_sales(
     project_id: str = Query(...),
@@ -896,7 +1330,6 @@ async def import_sales_excel(
     
     # Find header row
     headers = {}
-    header_row = 1
     for col in range(1, ws.max_column + 1):
         cell_value = ws.cell(row=1, column=col).value
         if cell_value:
@@ -1055,7 +1488,6 @@ async def get_dashboard(project_id: str, current_user: dict = Depends(get_curren
     total_units = sum(b.get("units", 0) for b in buildings)
     
     # Calculate unsold inventory
-    total_building_value = sum(b.get("estimated_cost", 0) for b in buildings)
     unsold_units = total_units - units_sold
     avg_unit_value = total_sales_value / units_sold if units_sold > 0 else 0
     unsold_inventory_value = unsold_units * avg_unit_value
