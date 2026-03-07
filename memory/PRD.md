@@ -227,11 +227,13 @@
 ## Prioritized Backlog
 
 ### P0 - Critical (Next Sprint)
-- [ ] PDF export using browser print/save
+- [x] PDF export using reportlab library ✅ COMPLETED March 2026
 - [ ] Form signature fields for digital signatures
 - [ ] Quarterly data copy from previous quarter
 
 ### P1 - High Priority
+- [ ] Implement PDF generation for Form-2, Form-5, Form-6
+- [ ] Refactor `backend/server.py` into separate route files
 - [ ] Admin template editor with HTML preview
 - [ ] Email notifications for report deadlines
 - [ ] Bulk building import from Excel
@@ -255,9 +257,18 @@
 - **Database:** MongoDB
 - **Auth:** JWT with bcrypt
 - **Excel:** openpyxl
+- **PDF:** reportlab
+
+## Completed This Session (March 2026)
+1. ✅ Implemented PDF generation for Form-1, Form-3, Form-4, Annexure-A using reportlab
+2. ✅ Created `/api/generate-pdf/{project_id}/{report_type}` endpoint
+3. ✅ Updated Reports page with Preview and Download PDF buttons
+4. ✅ Added "PDF Ready" badges for supported report types
+5. ✅ Verified data persistence across page reloads
 
 ## Next Tasks
-1. Implement PDF download using html2canvas/jsPDF
+1. Implement PDF generation for remaining forms (Form-2, Form-5, Form-6)
 2. Add form signature capture component
 3. Build quarterly data copy feature
-4. Create admin template editor
+4. Refactor backend routes into separate files
+
