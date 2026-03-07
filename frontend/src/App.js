@@ -3250,17 +3250,19 @@ const ReportsPage = () => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [templates, setTemplates] = useState([]);
   const [generating, setGenerating] = useState("");
+  const [downloading, setDownloading] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  // Reports with PDF support marked
   const reportTypes = [
-    { type: "form-1", name: "Form-1: Architect Certificate", description: "Percentage of Completion", role: "architect" },
-    { type: "form-2", name: "Form-2: Architect Completion", description: "Building Completion Certificate", role: "architect" },
-    { type: "form-3", name: "Form-3: Engineer Certificate", description: "Cost Incurred Statement", role: "engineer" },
-    { type: "form-4", name: "Form-4: CA Certificate", description: "Project Cost Statement", role: "ca" },
-    { type: "form-5", name: "Form-5: CA Compliance", description: "Receivable Compliance", role: "ca" },
-    { type: "form-6", name: "Form-6: Auditor Certificate", description: "Statement of Accounts", role: "auditor" },
-    { type: "annexure-a", name: "Annexure-A", description: "Statement of Receivables", role: "developer" },
+    { type: "form-1", name: "Form-1: Architect Certificate", description: "Percentage of Completion", role: "architect", hasPdf: true },
+    { type: "form-2", name: "Form-2: Architect Completion", description: "Building Completion Certificate", role: "architect", hasPdf: false },
+    { type: "form-3", name: "Form-3: Engineer Certificate", description: "Cost Incurred Statement", role: "engineer", hasPdf: true },
+    { type: "form-4", name: "Form-4: CA Certificate", description: "Project Cost Statement", role: "ca", hasPdf: true },
+    { type: "form-5", name: "Form-5: CA Compliance", description: "Receivable Compliance", role: "ca", hasPdf: false },
+    { type: "form-6", name: "Form-6: Auditor Certificate", description: "Statement of Accounts", role: "auditor", hasPdf: false },
+    { type: "annexure-a", name: "Annexure-A", description: "Statement of Receivables", role: "developer", hasPdf: true },
   ];
 
   useEffect(() => {
@@ -3396,6 +3398,46 @@ const ReportsPage = () => {
     printWindow.print();
   };
 
+  const downloadPdf = async (reportType) => {
+    if (!selectedProject) {
+      toast.error("Please select a project");
+      return;
+    }
+    setDownloading(reportType);
+    try {
+      const response = await axios.get(
+        `${API}/generate-pdf/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`,
+        { responseType: 'blob' }
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from header or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `${reportType}_report.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename=(.+)/);
+        if (filenameMatch) filename = filenameMatch[1];
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("PDF downloaded successfully");
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || "Failed to generate PDF";
+      toast.error(errorMsg);
+    } finally {
+      setDownloading("");
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6" data-testid="reports-page">
@@ -3447,28 +3489,77 @@ const ReportsPage = () => {
           {reportTypes.map((report) => (
             <Card key={report.type} className="card-hover">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">{report.name}</CardTitle>
-                <CardDescription>{report.description}</CardDescription>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base">{report.name}</CardTitle>
+                    <CardDescription>{report.description}</CardDescription>
+                  </div>
+                  {report.hasPdf && (
+                    <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">
+                      PDF Ready
+                    </Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
-                  <Badge variant="secondary" className="capitalize">{report.role}</Badge>
-                  <Button
-                    size="sm"
-                    onClick={() => generateReport(report.type)}
-                    disabled={generating === report.type}
-                    className="bg-blue-600 hover:bg-blue-700"
-                    data-testid={`generate-${report.type}`}
-                  >
-                    {generating === report.type ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary" className="capitalize">{report.role}</Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => generateReport(report.type)}
+                      disabled={generating === report.type}
+                      className="flex-1"
+                      data-testid={`preview-${report.type}`}
+                    >
+                      {generating === report.type ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4 mr-1" />
+                          Preview
+                        </>
+                      )}
+                    </Button>
+                    {report.hasPdf ? (
+                      <Button
+                        size="sm"
+                        onClick={() => downloadPdf(report.type)}
+                        disabled={downloading === report.type}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                        data-testid={`download-${report.type}`}
+                      >
+                        {downloading === report.type ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Download className="h-4 w-4 mr-1" />
+                            Download PDF
+                          </>
+                        )}
+                      </Button>
                     ) : (
-                      <>
-                        <FileText className="h-4 w-4 mr-1" />
-                        Generate
-                      </>
+                      <Button
+                        size="sm"
+                        onClick={() => generateReport(report.type)}
+                        disabled={generating === report.type}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                        data-testid={`generate-${report.type}`}
+                      >
+                        {generating === report.type ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <FileText className="h-4 w-4 mr-1" />
+                            Generate
+                          </>
+                        )}
+                      </Button>
                     )}
-                  </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

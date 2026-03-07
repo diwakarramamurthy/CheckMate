@@ -2329,6 +2329,113 @@ async def generate_report(
     # Return raw data for frontend rendering
     return {"html": None, "data": data}
 
+
+# =========================
+# PDF GENERATION ENDPOINT
+# =========================
+
+@api_router.get("/generate-pdf/{project_id}/{report_type}")
+async def generate_pdf_report(
+    project_id: str,
+    report_type: str,
+    quarter: str = Query(...),
+    year: int = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate RERA report as downloadable PDF"""
+    from pdf_generator import (
+        generate_form1_pdf, 
+        generate_form3_pdf, 
+        generate_form4_pdf, 
+        generate_annexure_a_pdf
+    )
+    
+    # Get project
+    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Get related data
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
+    
+    construction_progress = await db.construction_progress.find(
+        {"project_id": project_id, "quarter": quarter, "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    infrastructure_progress = await db.infrastructure_progress.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    
+    project_cost = await db.project_costs.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    
+    building_costs = await db.building_costs.find(
+        {"project_id": project_id, "quarter": quarter, "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    estimated_dev_cost = await db.estimated_development_costs.find_one(
+        {"project_id": project_id},
+        {"_id": 0}
+    )
+    
+    sales = await db.unit_sales.find({"project_id": project_id}, {"_id": 0}).to_list(10000)
+    
+    # Generate PDF based on report type
+    try:
+        if report_type == "form-1":
+            pdf_buffer = generate_form1_pdf(
+                project, buildings, construction_progress, 
+                infrastructure_progress, quarter, year
+            )
+            filename = f"Form1_Construction_Progress_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
+            
+        elif report_type == "form-3":
+            pdf_buffer = generate_form3_pdf(
+                project, buildings, building_costs, 
+                estimated_dev_cost, quarter, year
+            )
+            filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
+            
+        elif report_type == "form-4":
+            pdf_buffer = generate_form4_pdf(
+                project, project_cost, estimated_dev_cost, quarter, year
+            )
+            filename = f"Form4_Project_Cost_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
+            
+        elif report_type == "annexure-a":
+            pdf_buffer = generate_annexure_a_pdf(
+                project, sales, buildings, quarter, year
+            )
+            filename = f"AnnexureA_Sales_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
+            
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"PDF generation not yet available for {report_type}. Use HTML preview instead."
+            )
+        
+        # Clean filename
+        filename = filename.replace(" ", "_").replace("/", "-")
+        
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": "application/pdf"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"PDF generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+
+
 def flatten_dict(d, parent_key='', sep='.'):
     """Flatten nested dict"""
     items = []
