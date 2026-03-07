@@ -3714,16 +3714,35 @@ const ImportPage = () => {
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={downloadTemplate} data-testid="download-template-btn">
+            <div className="flex gap-3 items-center">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  // Open in same window to trigger download
+                  window.location.href = `${API}/import/sales-template`;
+                }}
+                data-testid="download-template-btn"
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Download Template
               </Button>
+              <span className="text-sm text-slate-500">or</span>
+              <a 
+                href={`${API}/import/sales-template`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 text-sm underline"
+              >
+                Right-click here &amp; "Save Link As"
+              </a>
               <Button onClick={handleUpload} disabled={uploading || !file} className="bg-blue-600 hover:bg-blue-700" data-testid="upload-btn">
                 {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                 Import Data
               </Button>
             </div>
+            <p className="text-xs text-slate-500">
+              If clicking doesn't work, right-click the link and select "Save Link As..." to download the template.
+            </p>
           </CardContent>
         </Card>
 

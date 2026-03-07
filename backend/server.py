@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -2085,6 +2085,8 @@ async def get_sales_template():
     """Download Excel template for sales import"""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
+    import tempfile
+    import os
     
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -2110,14 +2112,15 @@ async def get_sales_template():
         for col_idx, value in enumerate(row_data, 1):
             ws.cell(row=row_idx, column=col_idx, value=value)
     
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
+    # Save to temp file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+    wb.save(temp_file.name)
+    temp_file.close()
     
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=sales_template.xlsx"}
+    return FileResponse(
+        path=temp_file.name,
+        filename="sales_template.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 # =========================
