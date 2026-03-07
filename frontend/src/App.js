@@ -3715,14 +3715,25 @@ const ImportPage = () => {
             </div>
 
             <div className="flex gap-3 items-center">
-              <a 
-                href={`${API}/import/sales-template`}
-                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  // Use hidden iframe to trigger download - most reliable method
+                  const iframe = document.createElement('iframe');
+                  iframe.style.display = 'none';
+                  iframe.src = `${API}/import/sales-template`;
+                  document.body.appendChild(iframe);
+                  // Remove iframe after download starts
+                  setTimeout(() => {
+                    document.body.removeChild(iframe);
+                  }, 5000);
+                  toast.success("Download started - check your Downloads folder");
+                }}
                 data-testid="download-template-btn"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download Template
-              </a>
+              </Button>
               <Button onClick={handleUpload} disabled={uploading || !file} className="bg-blue-600 hover:bg-blue-700" data-testid="upload-btn">
                 {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                 Import Data
