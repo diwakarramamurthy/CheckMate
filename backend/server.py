@@ -328,15 +328,19 @@ class InfrastructureActivityItem(BaseModel):
     base_weightage: float = 0
 
 class ProjectInfrastructureWorks(BaseModel):
-    road_footpath_storm_drain: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=25.0)
-    underground_sewage_network: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=15.0)
-    sewage_treatment_plant: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=10.0)
-    overhead_sump_reservoir: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=10.0)
-    underground_water_distribution: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=12.5)
-    electric_substation_cables: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=12.5)
-    street_lights: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=5.0)
-    entry_gate: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=3.0)
-    boundary_wall: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=7.0)
+    road_footpath_storm_drain: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=21.5)
+    underground_sewage_network: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=13.0)
+    sewage_treatment_plant: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=8.5)
+    overhead_sump_reservoir: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=8.5)
+    underground_water_distribution: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=10.5)
+    electric_substation_cables: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=10.5)
+    street_lights: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=4.0)
+    entry_gate: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=2.5)
+    boundary_wall: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=6.0)
+    club_house: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=7.0)
+    swimming_pool: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=3.5)
+    amphitheatre: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=2.5)
+    gardens_playground: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=2.0)
 
 # Legacy/Simple activity model for backward compatibility
 class ConstructionActivityBase(BaseModel):
@@ -420,6 +424,10 @@ class InfrastructureCostBase(BaseModel):
     street_lights: InfrastructureCostItem = InfrastructureCostItem()
     entry_gate: InfrastructureCostItem = InfrastructureCostItem()
     boundary_wall: InfrastructureCostItem = InfrastructureCostItem()
+    club_house: InfrastructureCostItem = InfrastructureCostItem()
+    swimming_pool: InfrastructureCostItem = InfrastructureCostItem()
+    amphitheatre: InfrastructureCostItem = InfrastructureCostItem()
+    gardens_playground: InfrastructureCostItem = InfrastructureCostItem()
 
 class InfrastructureCostCreate(InfrastructureCostBase):
     pass
@@ -1002,15 +1010,19 @@ async def delete_building(building_id: str, current_user: dict = Depends(get_cur
 # =========================
 
 INFRASTRUCTURE_ITEMS = [
-    {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 25.0},
-    {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 15.0},
-    {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 10.0},
-    {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 10.0},
-    {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 12.5},
-    {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 12.5},
-    {"id": "street_lights", "name": "Street Lights", "weightage": 5.0},
-    {"id": "entry_gate", "name": "Entry Gate", "weightage": 3.0},
-    {"id": "boundary_wall", "name": "Boundary wall", "weightage": 7.0}
+    {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 21.5},
+    {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 13.0},
+    {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 8.5},
+    {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 8.5},
+    {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 10.5},
+    {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 10.5},
+    {"id": "street_lights", "name": "Street Lights", "weightage": 4.0},
+    {"id": "entry_gate", "name": "Entry Gate", "weightage": 2.5},
+    {"id": "boundary_wall", "name": "Boundary wall", "weightage": 6.0},
+    {"id": "club_house", "name": "Club House", "weightage": 7.0},
+    {"id": "swimming_pool", "name": "Swimming Pool", "weightage": 3.5},
+    {"id": "amphitheatre", "name": "Amphitheatre", "weightage": 2.5},
+    {"id": "gardens_playground", "name": "Gardens / Play Ground", "weightage": 2.0}
 ]
 
 @api_router.get("/infrastructure-costs/template")
@@ -1375,15 +1387,19 @@ async def get_detailed_construction_template():
         "infrastructure_works": {
             "total_weightage": 100,
             "activities": [
-                {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 25.0},
-                {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 15.0},
-                {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 10.0},
-                {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 10.0},
-                {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 12.5},
-                {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 12.5},
-                {"id": "street_lights", "name": "Street Lights", "weightage": 5.0},
-                {"id": "entry_gate", "name": "Entry Gate", "weightage": 3.0},
-                {"id": "boundary_wall", "name": "Boundary wall", "weightage": 7.0}
+                {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 21.5},
+                {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 13.0},
+                {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 8.5},
+                {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 8.5},
+                {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 10.5},
+                {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 10.5},
+                {"id": "street_lights", "name": "Street Lights", "weightage": 4.0},
+                {"id": "entry_gate", "name": "Entry Gate", "weightage": 2.5},
+                {"id": "boundary_wall", "name": "Boundary wall", "weightage": 6.0},
+                {"id": "club_house", "name": "Club House", "weightage": 7.0},
+                {"id": "swimming_pool", "name": "Swimming Pool", "weightage": 3.5},
+                {"id": "amphitheatre", "name": "Amphitheatre", "weightage": 2.5},
+                {"id": "gardens_playground", "name": "Gardens / Play Ground", "weightage": 2.0}
             ]
         }
     }
@@ -1502,15 +1518,19 @@ async def create_infrastructure_progress(
     
     # Get infrastructure template
     infrastructure_template = [
-        {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 25.0},
-        {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 15.0},
-        {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 10.0},
-        {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 10.0},
-        {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 12.5},
-        {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 12.5},
-        {"id": "street_lights", "name": "Street Lights", "weightage": 5.0},
-        {"id": "entry_gate", "name": "Entry Gate", "weightage": 3.0},
-        {"id": "boundary_wall", "name": "Boundary wall", "weightage": 7.0}
+        {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 21.5},
+        {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 13.0},
+        {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 8.5},
+        {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 8.5},
+        {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 10.5},
+        {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 10.5},
+        {"id": "street_lights", "name": "Street Lights", "weightage": 4.0},
+        {"id": "entry_gate", "name": "Entry Gate", "weightage": 2.5},
+        {"id": "boundary_wall", "name": "Boundary wall", "weightage": 6.0},
+        {"id": "club_house", "name": "Club House", "weightage": 7.0},
+        {"id": "swimming_pool", "name": "Swimming Pool", "weightage": 3.5},
+        {"id": "amphitheatre", "name": "Amphitheatre", "weightage": 2.5},
+        {"id": "gardens_playground", "name": "Gardens / Play Ground", "weightage": 2.0}
     ]
     
     # Calculate recalibrated completion

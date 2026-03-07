@@ -226,6 +226,10 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
         ["7", "Street Lights", "Yes", f"{infra_data.get('street_lights', {}).get('completion', 0):.0f}%"],
         ["8", "Entry Gate", "Yes", f"{infra_data.get('entry_gate', {}).get('completion', 0):.0f}%"],
         ["9", "Boundary wall", "Yes", f"{infra_data.get('boundary_wall', {}).get('completion', 0):.0f}%"],
+        ["10", "Club House", "Yes", f"{infra_data.get('club_house', {}).get('completion', 0):.0f}%"],
+        ["11", "Swimming Pool", "Yes", f"{infra_data.get('swimming_pool', {}).get('completion', 0):.0f}%"],
+        ["12", "Amphitheatre", "Yes", f"{infra_data.get('amphitheatre', {}).get('completion', 0):.0f}%"],
+        ["13", "Gardens / Play Ground", "Yes", f"{infra_data.get('gardens_playground', {}).get('completion', 0):.0f}%"],
     ]
     
     table_b = Table(table_b_data, colWidths=[0.5*inch, 4*inch, 0.8*inch, 1*inch])
@@ -376,6 +380,10 @@ def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, q
         ["6", "Electric infrastructure", "-", "-", "-"],
         ["7", "Street Lights", "-", "-", "-"],
         ["8", "Entry Gate & Boundary wall", "-", "-", "-"],
+        ["9", "Club House", "-", "-", "-"],
+        ["10", "Swimming Pool", "-", "-", "-"],
+        ["11", "Amphitheatre", "-", "-", "-"],
+        ["12", "Gardens / Play Ground", "-", "-", "-"],
         ["", "TOTAL INFRASTRUCTURE", format_currency(infra_cost), "-", "-"],
     ]
     
