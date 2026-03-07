@@ -3703,17 +3703,17 @@ const ImportPage = () => {
             <div className="flex gap-3 items-center">
               <Button 
                 variant="outline"
-                onClick={async () => {
-                  try {
-                    toast.info("Downloading template...");
-                    const response = await axios.get(`${API}/import/sales-template`, {
-                      responseType: 'blob'
-                    });
-                    saveAs(response.data, 'sales_template.xlsx');
-                    toast.success("Template downloaded successfully!");
-                  } catch (err) {
-                    console.error("Download error:", err);
-                    toast.error("Download failed. Try right-clicking and 'Save Link As'");
+                onClick={() => {
+                  // Open in new window - browser will auto-download due to Content-Disposition header
+                  const downloadWindow = window.open(`${API}/import/sales-template`, '_blank');
+                  if (downloadWindow) {
+                    toast.success("Download window opened - check your Downloads folder");
+                    // Close the window after a short delay
+                    setTimeout(() => {
+                      downloadWindow.close();
+                    }, 2000);
+                  } else {
+                    toast.error("Popup blocked! Please allow popups for this site, or right-click and 'Save Link As'");
                   }
                 }}
                 data-testid="download-template-btn"
@@ -3726,6 +3726,9 @@ const ImportPage = () => {
                 Import Data
               </Button>
             </div>
+            <p className="text-xs text-slate-500 mt-2">
+              <strong>Alternative:</strong> <a href={`${API}/import/sales-template`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Click here</a> to open download in new tab, or right-click and "Save Link As"
+            </p>
           </CardContent>
         </Card>
 
