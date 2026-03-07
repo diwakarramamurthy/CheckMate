@@ -1,6 +1,7 @@
 """
-RERA Forms PDF Generator - Goa State Format
-Generates Form-1 to Form-6 and Annexure-A in official format
+RERA Forms PDF Generator - Goa State Official Format
+Generates Form-1 to Form-6 and Annexure-A in official Goa RERA format
+Based on: Goa Real Estate (Regulation and Development) Rules 2017
 """
 
 from reportlab.lib import colors
@@ -18,29 +19,29 @@ PAGE_WIDTH, PAGE_HEIGHT = A4
 # Styles
 styles = getSampleStyleSheet()
 
-# Custom styles
+# Custom styles for official format
 TITLE_STYLE = ParagraphStyle(
     'Title',
     parent=styles['Heading1'],
-    fontSize=14,
+    fontSize=12,
     alignment=TA_CENTER,
-    spaceAfter=12,
+    spaceAfter=6,
     fontName='Helvetica-Bold'
 )
 
 SUBTITLE_STYLE = ParagraphStyle(
     'Subtitle',
     parent=styles['Normal'],
-    fontSize=11,
+    fontSize=10,
     alignment=TA_CENTER,
-    spaceAfter=6,
+    spaceAfter=4,
     fontName='Helvetica-Bold'
 )
 
 HEADER_STYLE = ParagraphStyle(
     'Header',
     parent=styles['Normal'],
-    fontSize=10,
+    fontSize=9,
     alignment=TA_CENTER,
     fontName='Helvetica-Bold'
 )
@@ -49,8 +50,9 @@ BODY_STYLE = ParagraphStyle(
     'Body',
     parent=styles['Normal'],
     fontSize=9,
-    alignment=TA_LEFT,
-    fontName='Helvetica'
+    alignment=TA_JUSTIFY,
+    fontName='Helvetica',
+    leading=12
 )
 
 SMALL_STYLE = ParagraphStyle(
@@ -69,11 +71,25 @@ RIGHT_STYLE = ParagraphStyle(
     fontName='Helvetica'
 )
 
+RULE_STYLE = ParagraphStyle(
+    'Rule',
+    parent=styles['Normal'],
+    fontSize=8,
+    alignment=TA_CENTER,
+    fontName='Helvetica-Oblique'
+)
+
 def format_currency(amount):
     """Format number as Indian currency"""
     if amount is None:
         return "0"
-    return f"{amount:,.2f}"
+    return f"₹{amount:,.2f}"
+
+def format_indian_number(num):
+    """Format number in Indian numbering system (lakhs, crores)"""
+    if num is None:
+        return "0"
+    return f"{num:,.0f}"
 
 def format_date(date_str):
     """Format date string"""
@@ -100,59 +116,116 @@ def get_quarter_dates(quarter, year):
 def generate_form1_pdf(project, buildings, construction_progress, infrastructure_progress, quarter, year):
     """
     FORM-1: Architect's Certificate - Percentage Completion of Construction
-    Table A: Building-wise completion
-    Table B: Common Development Works
+    Official Goa RERA Format as per Rule 5(1)(a)(ii)
     """
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch, 
+                           leftMargin=0.5*inch, rightMargin=0.5*inch)
     elements = []
     
     start_date, end_date = get_quarter_dates(quarter, year)
     
-    # Header
-    elements.append(Paragraph("DEPARTMENT OF URBAN DEVELOPMENT", TITLE_STYLE))
-    elements.append(Paragraph("GOVERNMENT OF GOA", SUBTITLE_STYLE))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph("<b>FORM - 1</b>", SUBTITLE_STYLE))
-    elements.append(Paragraph("ARCHITECT'S / LICENSED SURVEYOR'S CERTIFICATE", SUBTITLE_STYLE))
-    elements.append(Paragraph("(Percentage completion of Construction)", SMALL_STYLE))
+    # Header - Official Format
+    elements.append(Paragraph("The Goa Real Estate (Regulation and Development)", SMALL_STYLE))
+    elements.append(Paragraph("(Registration of Real Estate Projects, Registration of Real Estate Agents,", SMALL_STYLE))
+    elements.append(Paragraph("Rates of Interest and Disclosures on Website) Rules 2017", SMALL_STYLE))
     elements.append(Spacer(1, 12))
     
-    # Project Details
-    project_info = [
-        ["Project Name:", project.get('project_name', ''), "RERA No:", project.get('rera_number', '')],
-        ["Promoter:", project.get('promoter_name', ''), "Quarter:", f"{quarter} {year}"],
-        ["Location:", f"{project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', '')}", "Report Date:", datetime.now().strftime("%d/%m/%Y")],
-    ]
+    elements.append(Paragraph("<b>FORM 1</b>", TITLE_STYLE))
+    elements.append(Paragraph("<i>(See Rule 5 (1) (a) (ii))</i>", RULE_STYLE))
+    elements.append(Paragraph("<b>ARCHITECT'S / LICENSED SURVEYOR'S CERTIFICATE</b>", SUBTITLE_STYLE))
+    elements.append(Paragraph("(To be submitted at the time of Registration of On-going Project", SMALL_STYLE))
+    elements.append(Paragraph("and for withdrawal of Money from Designated Account)", SMALL_STYLE))
+    elements.append(Spacer(1, 15))
     
-    project_table = Table(project_info, colWidths=[1.2*inch, 2.5*inch, 1*inch, 2*inch])
-    project_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(project_table)
-    elements.append(Spacer(1, 20))
-    
-    # Table A: Building-wise Construction Progress
-    elements.append(Paragraph("<b>TABLE A: Building-wise Percentage Completion of Construction</b>", HEADER_STYLE))
+    # To section
+    to_text = f"""<b>To</b><br/>
+    {project.get('promoter_name', '________________________')},<br/>
+    {project.get('promoter_address', project.get('address', '________________________'))},<br/>
+    {project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', 'Goa')}
+    """
+    elements.append(Paragraph(to_text, BODY_STYLE))
     elements.append(Spacer(1, 8))
     
-    # Table A Headers
-    table_a_headers = [
-        "Sr.", "Building/\nWing", "Excavation", "Basement\n& Plinth", "Podiums", "Stilt\nFloor", 
-        "Super\nStructure", "Internal\nWorks", "Doors/\nWindows", "Stairs/\nLifts", 
-        "External\nFinish", "Final\nItems", "Overall\n%"
+    # Date
+    elements.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", RIGHT_STYLE))
+    elements.append(Spacer(1, 10))
+    
+    # Subject line
+    num_buildings = len(buildings) if buildings else "__"
+    phase = project.get('phase', '1')
+    subject_text = f"""<b>Subject:</b> Certificate of Percentage of Completion of Construction Work of 
+    <b>{num_buildings}</b> Building(s) / Wing(s) of the <b>{phase}</b> Phase of the Project situated on the Plot bearing 
+    Survey No./Plot No. <b>{project.get('survey_number', '________')}</b> of Ward <b>{project.get('ward', '________')}</b> 
+    Municipality <b>{project.get('municipality', '________')}</b> District <b>{project.get('district', 'North Goa')}</b> 
+    PIN <b>{project.get('pin_code', '________')}</b> village/panchayat <b>{project.get('village', '________')}</b> 
+    taluka <b>{project.get('taluka', '________')}</b> admeasuring <b>{project.get('total_area', '________')}</b> sq.mts. 
+    area being developed by <b>{project.get('promoter_name', '________')}</b>
+    """
+    elements.append(Paragraph(subject_text, BODY_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Reference
+    elements.append(Paragraph(f"<b>Ref: Goa RERA Registration Number:</b> {project.get('rera_number', '_________________________')}", BODY_STYLE))
+    elements.append(Spacer(1, 10))
+    
+    # Salutation
+    elements.append(Paragraph("<b>Sir,</b>", BODY_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Assignment statement
+    architect_name = project.get('architect_name', '________________________')
+    assignment_text = f"""I/We <b>{architect_name}</b> have undertaken assignment as Architect / Licensed Surveyor 
+    of certifying Percentage of Completion of Construction Work of the <b>{num_buildings}</b> Building(s) / Wing(s) 
+    of the <b>{phase}</b> Phase of the Project, situated on the plot bearing Survey No./Plot No. 
+    <b>{project.get('survey_number', '________')}</b> of Ward <b>{project.get('ward', '________')}</b> 
+    Municipality/Village <b>{project.get('village', '________')}</b> District <b>{project.get('district', 'North Goa')}</b> 
+    admeasuring <b>{project.get('total_area', '________')}</b> sq.mts. area being developed by 
+    <b>{project.get('promoter_name', '________')}</b>.
+    """
+    elements.append(Paragraph(assignment_text, BODY_STYLE))
+    elements.append(Spacer(1, 12))
+    
+    # Technical Professionals Section
+    elements.append(Paragraph("<b>1. Following technical professionals are appointed by Owner / Promoter:-</b>", BODY_STYLE))
+    elements.append(Spacer(1, 6))
+    
+    professionals = [
+        [f"(i) M/s/Shri/Smt. {project.get('architect_name', '________________________')} as Architect;"],
+        [f"(ii) M/s/Shri/Smt. {project.get('structural_consultant', '________________________')} as Structural Consultant;"],
+        [f"(iii) M/s/Shri/Smt. {project.get('mep_consultant', '________________________')} as MEP Consultant;"],
+        [f"(iv) M/s/Shri/Smt. {project.get('site_supervisor', '________________________')} as Site Supervisor;"],
     ]
     
-    table_a_data = [table_a_headers]
+    prof_table = Table(professionals, colWidths=[6.5*inch])
+    prof_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('LEFTPADDING', (0, 0), (-1, -1), 20),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(prof_table)
+    elements.append(Spacer(1, 12))
+    
+    # Certification text
+    cert_intro = f"""Based on Site Inspection, with respect to each of the Building/Wing of the aforesaid Real Estate Project, 
+    I certify that as on the date of this certificate, the Percentage of Work done for each of the building/Wing of the 
+    Real Estate Project as registered vide number <b>{project.get('rera_number', '________')}</b> under GoaRERA is as per 
+    Table A herein below. The percentage of the work executed with respect to each of the activity of the entire phase 
+    is detailed in Table B.
+    """
+    elements.append(Paragraph(cert_intro, BODY_STYLE))
+    elements.append(Spacer(1, 15))
     
     # Build progress lookup
-    progress_lookup = {p.get('building_id'): p for p in construction_progress}
+    progress_lookup = {p.get('building_id'): p for p in construction_progress} if construction_progress else {}
     
-    for idx, building in enumerate(buildings, 1):
+    # TABLE A - For each building
+    for building in (buildings or []):
+        building_name = building.get('building_name', 'Building')
+        elements.append(Paragraph(f"<b>TABLE A: Building / Wing Number: {building_name}</b>", HEADER_STYLE))
+        elements.append(Spacer(1, 6))
+        
         progress = progress_lookup.get(building.get('building_id'), {})
         tower_acts = progress.get('tower_activities', {})
         
@@ -167,8 +240,15 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
         doors = tower_acts.get('door_shutter_fixing', {})
         waterproof = tower_acts.get('water_proofing', {})
         painting = tower_acts.get('painting', {})
+        carpark = tower_acts.get('carpark', {})
+        handover = tower_acts.get('handover_intimation', {})
         
-        # Calculate category completions (simplified)
+        def get_activity_completion(cat_data, activity_id):
+            if not cat_data:
+                return 0
+            activity = cat_data.get(activity_id, {})
+            return activity.get('completion', 0) if isinstance(activity, dict) else 0
+        
         def get_cat_avg(cat_data):
             if not cat_data:
                 return 0
@@ -176,95 +256,104 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
             count = sum(1 for v in cat_data.values() if isinstance(v, dict))
             return total / count if count > 0 else 0
         
-        row = [
-            str(idx),
-            building.get('building_name', ''),
-            f"{get_cat_avg(plinth):.0f}%",  # Excavation from plinth
-            f"{get_cat_avg(plinth):.0f}%",  # Basement & Plinth
-            "-",  # Podiums
-            "-",  # Stilt
-            f"{get_cat_avg(slab):.0f}%",  # Super Structure
-            f"{get_cat_avg(brickwork):.0f}%",  # Internal Works
-            f"{get_cat_avg(doors):.0f}%",  # Doors/Windows
-            "-",  # Stairs/Lifts
-            f"{get_cat_avg(waterproof):.0f}%",  # External Finish
-            f"{get_cat_avg(painting):.0f}%",  # Final Items
-            f"{progress.get('overall_completion', 0):.1f}%"
+        # Official Form-1 Table A format
+        num_basements = building.get('basements', 0)
+        num_podiums = building.get('podiums', 0)
+        num_floors = building.get('residential_floors', 4)
+        
+        table_a_data = [
+            ["Sr. No", "Tasks/Activity", "Percentage of\nwork done"],
+            ["1", "Excavation", f"{get_activity_completion(plinth, 'excavation'):.0f}%"],
+            ["2", f"{num_basements} number of Basement(s) and Plinth", f"{get_cat_avg(plinth):.0f}%"],
+            ["3", f"{num_podiums} number of Podiums", f"{get_cat_avg(plinth):.0f}%" if num_podiums > 0 else "N/A"],
+            ["4", "Stilt Floor", f"{get_activity_completion(plinth, 'filling_earth_plinth_pcc'):.0f}%"],
+            ["5", f"{num_floors} number of Slabs of Super Structure", f"{get_cat_avg(slab):.0f}%"],
+            ["6", "Internal walls, Internal Plaster, Floorings within Flats/Premises", f"{get_cat_avg(brickwork):.0f}%"],
+            ["7", "Doors and Windows to each of the Flat/Premises", f"{(get_cat_avg(doors) + get_cat_avg(windows)) / 2:.0f}%"],
+            ["8", "Sanitary Fittings within the Flat/Premises, Electrical Fittings", f"{(get_cat_avg(plumbing) + get_cat_avg(electrical)) / 2:.0f}%"],
+            ["9", "Staircases, Lift Wells and Lobbies, Water Tanks", f"{get_cat_avg(slab):.0f}%"],
+            ["10", "External plumbing/plaster, Elevation, Terraces waterproofing,\nLifts, Fire Fighting, Electrical to Common Areas, etc.", f"{(get_cat_avg(waterproof) + get_cat_avg(painting)) / 2:.0f}%"],
         ]
-        table_a_data.append(row)
+        
+        table_a = Table(table_a_data, colWidths=[0.6*inch, 4.5*inch, 1.2*inch])
+        table_a.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(table_a)
+        elements.append(Spacer(1, 10))
+        
+        # Add overall completion for this building
+        overall = progress.get('overall_completion', 0)
+        elements.append(Paragraph(f"<b>Overall Completion for {building_name}: {overall:.1f}%</b>", SMALL_STYLE))
+        elements.append(Spacer(1, 15))
     
-    # Create Table A
-    col_widths = [0.35*inch, 0.6*inch] + [0.5*inch] * 11
-    table_a = Table(table_a_data, colWidths=col_widths)
-    table_a.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+    # TABLE B - Infrastructure/Common Development Works
+    elements.append(PageBreak())
+    elements.append(Paragraph("<b>TABLE B: Internal & External Development Works in Respect of the entire Registered Phase</b>", HEADER_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    infra_data = infrastructure_progress.get('activities', {}) if infrastructure_progress else {}
+    
+    # Official Form-1 Table B format
+    table_b_data = [
+        ["Sr. No.", "Common areas and Facilities, Amenities", "Proposed\n(Yes/No)", "Percentage of\nwork done", "Details"],
+        ["1.", "Internal Roads & Footpaths", "Yes", f"{infra_data.get('road_footpath_storm_drain', {}).get('completion', 0):.0f}%", ""],
+        ["2.", "Water Supply", "Yes", f"{infra_data.get('underground_water_distribution', {}).get('completion', 0):.0f}%", ""],
+        ["3.", "Sewerage (chamber, lines, Septic Tank, STP)", "Yes", f"{infra_data.get('underground_sewage_network', {}).get('completion', 0):.0f}%", ""],
+        ["4.", "Storm Water Drains", "Yes", f"{infra_data.get('road_footpath_storm_drain', {}).get('completion', 0):.0f}%", ""],
+        ["5.", "Landscaping & Tree Planting", "Yes", f"{infra_data.get('gardens_playground', {}).get('completion', 0):.0f}%", ""],
+        ["6.", "Street Lighting", "Yes", f"{infra_data.get('street_lights', {}).get('completion', 0):.0f}%", ""],
+        ["7.", "Community Buildings (Club House)", "Yes", f"{infra_data.get('club_house', {}).get('completion', 0):.0f}%", ""],
+        ["8.", "Treatment and disposal of sewage and sullage water", "Yes", f"{infra_data.get('sewage_treatment_plant', {}).get('completion', 0):.0f}%", ""],
+        ["9.", "Solid Waste management & Disposal", "Yes", "0%", ""],
+        ["10.", "Water conservation, Rain water harvesting", "Yes", f"{infra_data.get('overhead_sump_reservoir', {}).get('completion', 0):.0f}%", ""],
+        ["11.", "Energy management", "Yes", f"{infra_data.get('electric_substation_cables', {}).get('completion', 0):.0f}%", ""],
+        ["12.", "Fire protection and fire safety requirements", "Yes", "0%", ""],
+        ["13.", "Electrical meter room, sub-station, receiving station", "Yes", f"{infra_data.get('electric_substation_cables', {}).get('completion', 0):.0f}%", ""],
+        ["14.", "Swimming Pool", "Yes", f"{infra_data.get('swimming_pool', {}).get('completion', 0):.0f}%", ""],
+        ["15.", "Amphitheatre", "Yes", f"{infra_data.get('amphitheatre', {}).get('completion', 0):.0f}%", ""],
+        ["16.", "Boundary Wall & Entry Gate", "Yes", f"{(infra_data.get('boundary_wall', {}).get('completion', 0) + infra_data.get('entry_gate', {}).get('completion', 0)) / 2:.0f}%", ""],
+    ]
+    
+    table_b = Table(table_b_data, colWidths=[0.5*inch, 3*inch, 0.8*inch, 0.9*inch, 1*inch])
+    table_b.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 7),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
     ]))
-    elements.append(table_a)
-    elements.append(Spacer(1, 20))
-    
-    # Table B: Common Development Works
-    elements.append(Paragraph("<b>TABLE B: Percentage Completion of Common Development Works</b>", HEADER_STYLE))
-    elements.append(Spacer(1, 8))
-    
-    infra_data = infrastructure_progress.get('activities', {}) if infrastructure_progress else {}
-    
-    table_b_data = [
-        ["Sr.", "Development Work", "Proposed", "% Completion"],
-        ["1", "Road, Foot-path and storm water drain", "Yes", f"{infra_data.get('road_footpath_storm_drain', {}).get('completion', 0):.0f}%"],
-        ["2", "Underground sewage drainage network", "Yes", f"{infra_data.get('underground_sewage_network', {}).get('completion', 0):.0f}%"],
-        ["3", "Sewage Treatment Plant", "Yes", f"{infra_data.get('sewage_treatment_plant', {}).get('completion', 0):.0f}%"],
-        ["4", "Over-head and Sump water reservoir/Tank", "Yes", f"{infra_data.get('overhead_sump_reservoir', {}).get('completion', 0):.0f}%"],
-        ["5", "Under ground water distribution network", "Yes", f"{infra_data.get('underground_water_distribution', {}).get('completion', 0):.0f}%"],
-        ["6", "Electric Substation & Under-ground cables", "Yes", f"{infra_data.get('electric_substation_cables', {}).get('completion', 0):.0f}%"],
-        ["7", "Street Lights", "Yes", f"{infra_data.get('street_lights', {}).get('completion', 0):.0f}%"],
-        ["8", "Entry Gate", "Yes", f"{infra_data.get('entry_gate', {}).get('completion', 0):.0f}%"],
-        ["9", "Boundary wall", "Yes", f"{infra_data.get('boundary_wall', {}).get('completion', 0):.0f}%"],
-        ["10", "Club House", "Yes", f"{infra_data.get('club_house', {}).get('completion', 0):.0f}%"],
-        ["11", "Swimming Pool", "Yes", f"{infra_data.get('swimming_pool', {}).get('completion', 0):.0f}%"],
-        ["12", "Amphitheatre", "Yes", f"{infra_data.get('amphitheatre', {}).get('completion', 0):.0f}%"],
-        ["13", "Gardens / Play Ground", "Yes", f"{infra_data.get('gardens_playground', {}).get('completion', 0):.0f}%"],
-    ]
-    
-    table_b = Table(table_b_data, colWidths=[0.5*inch, 4*inch, 0.8*inch, 1*inch])
-    table_b.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-    ]))
     elements.append(table_b)
-    elements.append(Spacer(1, 30))
+    elements.append(Spacer(1, 25))
     
-    # Certification
-    cert_text = f"""
-    I/We hereby certify that the above information is true and correct to the best of my/our knowledge 
-    and belief, based on my/our inspection of the project site on _________________.
-    """
-    elements.append(Paragraph(cert_text, BODY_STYLE))
+    # Closing
+    elements.append(Paragraph("<b>Yours Faithfully,</b>", BODY_STYLE))
     elements.append(Spacer(1, 30))
     
     # Signature block
     sig_data = [
-        ["", ""],
-        ["Architect/Licensed Surveyor", "Place: ________________"],
-        [f"Name: {project.get('architect_name', '_________________')}", f"Date: {datetime.now().strftime('%d/%m/%Y')}"],
-        [f"License No: {project.get('architect_license', '_________________')}", ""],
+        ["_______________________________", ""],
+        ["Signature & Name (IN BLOCK LETTERS)", ""],
+        ["of Architect / Licensed Surveyor", ""],
+        [f"Name: {project.get('architect_name', '________________________')}", ""],
+        [f"License No.: {project.get('architect_license', '________________________')}", ""],
     ]
-    sig_table = Table(sig_data, colWidths=[3.5*inch, 3*inch])
+    sig_table = Table(sig_data, colWidths=[4*inch, 2*inch])
     sig_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
     ]))
     elements.append(sig_table)
     
@@ -276,150 +365,169 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
 def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, quarter, year):
     """
     FORM-3: Engineer's Certificate - Cost Incurred for Development
-    Table A: Building-wise costs
-    Table B: Development works costs
+    Official Goa RERA Format as per Rule 5(1)(a)(ii)
     """
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch,
+                           leftMargin=0.5*inch, rightMargin=0.5*inch)
     elements = []
     
     # Header
-    elements.append(Paragraph("DEPARTMENT OF URBAN DEVELOPMENT", TITLE_STYLE))
-    elements.append(Paragraph("GOVERNMENT OF GOA", SUBTITLE_STYLE))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph("<b>FORM - 3</b>", SUBTITLE_STYLE))
-    elements.append(Paragraph("ENGINEER'S CERTIFICATE", SUBTITLE_STYLE))
-    elements.append(Paragraph("(Statement showing cost of construction incurred for development of project)", SMALL_STYLE))
+    elements.append(Paragraph("The Goa Real Estate (Regulation and Development)", SMALL_STYLE))
+    elements.append(Paragraph("(Registration of Real Estate Projects, Registration of Real Estate Agents,", SMALL_STYLE))
+    elements.append(Paragraph("Rates of Interest and Disclosures on Website) Rules 2017", SMALL_STYLE))
     elements.append(Spacer(1, 12))
     
-    # Project Details
-    project_info = [
-        ["Project Name:", project.get('project_name', ''), "RERA No:", project.get('rera_number', '')],
-        ["Promoter:", project.get('promoter_name', ''), "Quarter:", f"{quarter} {year}"],
-    ]
-    project_table = Table(project_info, colWidths=[1.2*inch, 2.5*inch, 1*inch, 2*inch])
-    project_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-    ]))
-    elements.append(project_table)
-    elements.append(Spacer(1, 20))
+    elements.append(Paragraph("<b>FORM 3</b>", TITLE_STYLE))
+    elements.append(Paragraph("<i>(See Rule 5 (1) (a) (ii))</i>", RULE_STYLE))
+    elements.append(Paragraph("<b>ENGINEER'S CERTIFICATE</b>", SUBTITLE_STYLE))
+    elements.append(Paragraph("(Cost Incurred Statement for Development)", SMALL_STYLE))
+    elements.append(Spacer(1, 15))
     
-    # Table A: Building-wise Cost
-    elements.append(Paragraph("<b>TABLE A: Building-wise Cost of Construction</b>", HEADER_STYLE))
+    # To section
+    to_text = f"""<b>To</b><br/>
+    {project.get('promoter_name', '________________________')},<br/>
+    {project.get('promoter_address', project.get('address', '________________________'))},<br/>
+    {project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', 'Goa')}
+    """
+    elements.append(Paragraph(to_text, BODY_STYLE))
     elements.append(Spacer(1, 8))
     
-    table_a_headers = ["Sr.", "Building/Wing", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)", "% Complete"]
-    table_a_data = [table_a_headers]
+    # Date
+    elements.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", RIGHT_STYLE))
+    elements.append(Spacer(1, 10))
+    
+    # Subject
+    subject_text = f"""<b>Subject:</b> Certificate of Cost Incurred for Development of the Project 
+    <b>{project.get('project_name', '________')}</b> situated at {project.get('village', '________')}, 
+    {project.get('taluka', '________')}, {project.get('district', 'North Goa')}
+    """
+    elements.append(Paragraph(subject_text, BODY_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Reference
+    elements.append(Paragraph(f"<b>Ref: Goa RERA Registration Number:</b> {project.get('rera_number', '_________________________')}", BODY_STYLE))
+    elements.append(Spacer(1, 10))
+    
+    # Salutation
+    elements.append(Paragraph("<b>Sir,</b>", BODY_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Assignment statement
+    engineer_name = project.get('engineer_name', '________________________')
+    assignment_text = f"""I/We <b>{engineer_name}</b> have undertaken assignment as Engineer for certifying 
+    Cost Incurred for Development of the Project <b>{project.get('project_name', '________')}</b> 
+    as registered vide number <b>{project.get('rera_number', '________')}</b> under GoaRERA.
+    """
+    elements.append(Paragraph(assignment_text, BODY_STYLE))
+    elements.append(Spacer(1, 12))
+    
+    # TABLE A - Building-wise Cost
+    elements.append(Paragraph("<b>TABLE A: Cost Incurred for Building Construction</b>", HEADER_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Get building costs
+    building_costs_lookup = {bc.get('building_id'): bc for bc in (building_costs or [])}
+    est_cost = estimated_dev_cost or {}
+    
+    table_a_data = [
+        ["Sr.", "Building/Wing", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)"]
+    ]
     
     total_estimated = 0
     total_incurred = 0
     
-    # Build cost lookup
-    cost_lookup = {c.get('building_id'): c for c in building_costs}
-    
-    for idx, building in enumerate(buildings, 1):
-        b_cost = cost_lookup.get(building.get('building_id'), {})
-        estimated = building.get('estimated_cost', 0)
-        incurred = b_cost.get('cost_incurred', 0)
-        balance = estimated - incurred
-        pct = (incurred / estimated * 100) if estimated > 0 else 0
+    for idx, building in enumerate(buildings or [], 1):
+        bc = building_costs_lookup.get(building.get('building_id'), {})
+        est = building.get('estimated_cost', 0)
+        incurred = bc.get('actual_cost', 0)
+        balance = est - incurred
         
-        total_estimated += estimated
+        total_estimated += est
         total_incurred += incurred
         
-        row = [
+        table_a_data.append([
             str(idx),
             building.get('building_name', ''),
-            format_currency(estimated),
-            format_currency(incurred),
-            format_currency(balance),
-            f"{pct:.1f}%"
-        ]
-        table_a_data.append(row)
+            format_indian_number(est),
+            format_indian_number(incurred),
+            format_indian_number(balance)
+        ])
     
-    # Total row
     table_a_data.append([
-        "", "TOTAL",
-        format_currency(total_estimated),
-        format_currency(total_incurred),
-        format_currency(total_estimated - total_incurred),
-        f"{(total_incurred/total_estimated*100) if total_estimated > 0 else 0:.1f}%"
+        "", "TOTAL", format_indian_number(total_estimated), 
+        format_indian_number(total_incurred), format_indian_number(total_estimated - total_incurred)
     ])
     
-    table_a = Table(table_a_data, colWidths=[0.4*inch, 1.2*inch, 1.3*inch, 1.3*inch, 1.3*inch, 0.8*inch])
+    table_a = Table(table_a_data, colWidths=[0.5*inch, 1.5*inch, 1.5*inch, 1.5*inch, 1.3*inch])
     table_a.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.95, 0.95, 0.95)),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
-        ('ALIGN', (0, 0), (1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
     ]))
     elements.append(table_a)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 15))
     
-    # Table B: Development Works Cost
+    # TABLE B - Development Works Cost
     elements.append(Paragraph("<b>TABLE B: Cost of Internal/External Development Works</b>", HEADER_STYLE))
     elements.append(Spacer(1, 8))
     
-    infra_cost = estimated_dev_cost.get('infrastructure_cost', 0) if estimated_dev_cost else 0
+    infra_cost = est_cost.get('infrastructure_cost', 0)
     
     table_b_data = [
-        ["Sr.", "Development Work", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)"],
-        ["1", "Road, Foot-path and storm water drain", "-", "-", "-"],
-        ["2", "Underground sewage drainage network", "-", "-", "-"],
-        ["3", "Sewage Treatment Plant", "-", "-", "-"],
-        ["4", "Water reservoir/Tank", "-", "-", "-"],
-        ["5", "Water distribution network", "-", "-", "-"],
-        ["6", "Electric infrastructure", "-", "-", "-"],
-        ["7", "Street Lights", "-", "-", "-"],
-        ["8", "Entry Gate & Boundary wall", "-", "-", "-"],
-        ["9", "Club House", "-", "-", "-"],
-        ["10", "Swimming Pool", "-", "-", "-"],
-        ["11", "Amphitheatre", "-", "-", "-"],
-        ["12", "Gardens / Play Ground", "-", "-", "-"],
-        ["", "TOTAL INFRASTRUCTURE", format_currency(infra_cost), "-", "-"],
+        ["Sr.", "Development Work", "Estimated (₹)", "Incurred (₹)", "Balance (₹)"],
+        ["1", "Internal Roads & Footpaths", "-", "-", "-"],
+        ["2", "Water Supply & Distribution", "-", "-", "-"],
+        ["3", "Sewerage & STP", "-", "-", "-"],
+        ["4", "Storm Water Drains", "-", "-", "-"],
+        ["5", "Landscaping", "-", "-", "-"],
+        ["6", "Street Lighting", "-", "-", "-"],
+        ["7", "Club House", "-", "-", "-"],
+        ["8", "Swimming Pool", "-", "-", "-"],
+        ["9", "Electrical Infrastructure", "-", "-", "-"],
+        ["10", "Boundary Wall & Gate", "-", "-", "-"],
+        ["", "TOTAL INFRASTRUCTURE", format_indian_number(infra_cost), "-", "-"],
     ]
     
-    table_b = Table(table_b_data, colWidths=[0.4*inch, 2.5*inch, 1.2*inch, 1.2*inch, 1*inch])
+    table_b = Table(table_b_data, colWidths=[0.5*inch, 2.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
     table_b.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.95, 0.95, 0.95)),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
     ]))
     elements.append(table_b)
+    elements.append(Spacer(1, 25))
+    
+    # Closing
+    elements.append(Paragraph("<b>Yours Faithfully,</b>", BODY_STYLE))
     elements.append(Spacer(1, 30))
     
-    # Certification
-    cert_text = """
-    I/We hereby certify that the above costs are true and correct to the best of my/our knowledge 
-    based on actual expenditure records and site measurements.
-    """
-    elements.append(Paragraph(cert_text, BODY_STYLE))
-    elements.append(Spacer(1, 30))
-    
-    # Signature
+    # Signature block
     sig_data = [
-        ["Engineer", "Place: ________________"],
-        [f"Name: {project.get('engineer_name', '_________________')}", f"Date: {datetime.now().strftime('%d/%m/%Y')}"],
-        [f"License No: {project.get('engineer_license', '_________________')}", ""],
+        ["_______________________________", ""],
+        ["Signature & Name of Engineer", ""],
+        [f"Name: {project.get('engineer_name', '________________________')}", ""],
+        [f"License No.: {project.get('engineer_license', '________________________')}", ""],
     ]
-    sig_table = Table(sig_data, colWidths=[3.5*inch, 3*inch])
+    sig_table = Table(sig_data, colWidths=[4*inch, 2*inch])
     sig_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
     ]))
     elements.append(sig_table)
     
@@ -430,139 +538,139 @@ def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, q
 
 def generate_form4_pdf(project, project_cost, estimated_dev_cost, quarter, year):
     """
-    FORM-4: CA's Certificate - Project Cost and Withdrawal
+    FORM-4: Chartered Accountant's Certificate - Project Cost Statement
+    Official Goa RERA Format
     """
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch,
+                           leftMargin=0.5*inch, rightMargin=0.5*inch)
     elements = []
     
     # Header
-    elements.append(Paragraph("DEPARTMENT OF URBAN DEVELOPMENT", TITLE_STYLE))
-    elements.append(Paragraph("GOVERNMENT OF GOA", SUBTITLE_STYLE))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph("<b>FORM - 4</b>", SUBTITLE_STYLE))
-    elements.append(Paragraph("CHARTERED ACCOUNTANT'S CERTIFICATE", SUBTITLE_STYLE))
-    elements.append(Paragraph("(Estimated cost of project and amount eligible for withdrawal)", SMALL_STYLE))
+    elements.append(Paragraph("The Goa Real Estate (Regulation and Development)", SMALL_STYLE))
+    elements.append(Paragraph("(Registration of Real Estate Projects, Registration of Real Estate Agents,", SMALL_STYLE))
+    elements.append(Paragraph("Rates of Interest and Disclosures on Website) Rules 2017", SMALL_STYLE))
     elements.append(Spacer(1, 12))
     
-    # Project Details
-    project_info = [
-        ["Project Name:", project.get('project_name', ''), "RERA No:", project.get('rera_number', '')],
-        ["Promoter:", project.get('promoter_name', ''), "Quarter:", f"{quarter} {year}"],
-    ]
-    project_table = Table(project_info, colWidths=[1.2*inch, 2.5*inch, 1*inch, 2*inch])
-    project_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-    ]))
-    elements.append(project_table)
-    elements.append(Spacer(1, 20))
+    elements.append(Paragraph("<b>FORM 4</b>", TITLE_STYLE))
+    elements.append(Paragraph("<i>(See Rule 5 (1) (a) (ii))</i>", RULE_STYLE))
+    elements.append(Paragraph("<b>CHARTERED ACCOUNTANT'S CERTIFICATE</b>", SUBTITLE_STYLE))
+    elements.append(Paragraph("(Project Cost Statement)", SMALL_STYLE))
+    elements.append(Spacer(1, 15))
     
-    cost = project_cost or {}
-    est_dev = estimated_dev_cost or {}
-    
-    # Section 1: Estimated Cost
-    elements.append(Paragraph("<b>1. ESTIMATED COST OF THE PROJECT</b>", HEADER_STYLE))
+    # To section
+    to_text = f"""<b>To</b><br/>
+    {project.get('promoter_name', '________________________')},<br/>
+    {project.get('promoter_address', project.get('address', '________________________'))},<br/>
+    {project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', 'Goa')}
+    """
+    elements.append(Paragraph(to_text, BODY_STYLE))
     elements.append(Spacer(1, 8))
     
-    # 1.i Land Cost
-    land_cost = cost.get('estimated_land_cost', 0)
+    # Date
+    elements.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", RIGHT_STYLE))
+    elements.append(Spacer(1, 10))
     
-    # 1.ii Development Cost breakdown
-    buildings_cost = est_dev.get('buildings_cost', 0)
-    infra_cost = est_dev.get('infrastructure_cost', 0)
-    consultants_fee = est_dev.get('consultants_fee', 0)
-    machinery_cost = est_dev.get('machinery_cost', 0)
-    total_dev = est_dev.get('total_estimated_development_cost', buildings_cost + infra_cost + consultants_fee + machinery_cost)
+    # Subject
+    subject_text = f"""<b>Subject:</b> Certificate of Project Cost for the Project 
+    <b>{project.get('project_name', '________')}</b> registered under GoaRERA.
+    """
+    elements.append(Paragraph(subject_text, BODY_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Reference
+    elements.append(Paragraph(f"<b>Ref: Goa RERA Registration Number:</b> {project.get('rera_number', '_________________________')}", BODY_STYLE))
+    elements.append(Spacer(1, 10))
+    
+    # Salutation
+    elements.append(Paragraph("<b>Sir,</b>", BODY_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Assignment statement
+    ca_name = project.get('ca_name', '________________________')
+    assignment_text = f"""I/We <b>{ca_name}</b>, Chartered Accountant(s), have examined the books of accounts and 
+    records of the promoter and certify the following with respect to the project cost of 
+    <b>{project.get('project_name', '________')}</b> as registered under GoaRERA.
+    """
+    elements.append(Paragraph(assignment_text, BODY_STYLE))
+    elements.append(Spacer(1, 15))
+    
+    # Project Cost Summary Table
+    elements.append(Paragraph("<b>PROJECT COST STATEMENT</b>", HEADER_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    est_cost = estimated_dev_cost or {}
+    pc = project_cost or {}
+    
+    land_cost = est_cost.get('land_cost', 0)
+    building_cost = est_cost.get('total_building_cost', 0)
+    infra_cost = est_cost.get('infrastructure_cost', 0)
+    other_cost = est_cost.get('other_costs', 0)
+    total_estimated = land_cost + building_cost + infra_cost + other_cost
     
     cost_data = [
-        ["", "Particulars", "Amount (₹)"],
-        ["1.i", "LAND COST", format_currency(land_cost)],
-        ["", "   a. Land acquisition cost", format_currency(cost.get('land_acquisition_cost', 0))],
-        ["", "   b. Development rights premium", format_currency(cost.get('development_rights_premium', 0))],
-        ["", "   c. TDR cost", format_currency(cost.get('tdr_cost', 0))],
-        ["", "   d. Stamp duty & registration", format_currency(cost.get('stamp_duty', 0))],
-        ["", "   e. Government charges", format_currency(cost.get('government_charges', 0))],
-        ["1.ii", "DEVELOPMENT COST", format_currency(total_dev)],
-        ["", "   1. Buildings cost", format_currency(buildings_cost)],
-        ["", "   2. Infrastructure cost", format_currency(infra_cost)],
-        ["", "   3. Consultants fee", format_currency(consultants_fee)],
-        ["", "   4. Cost of Machineries", format_currency(machinery_cost)],
-        ["", "", ""],
-        ["", "TOTAL ESTIMATED COST (1.i + 1.ii)", format_currency(land_cost + total_dev)],
+        ["Sr.", "Particulars", "Estimated Cost (₹)", "Actual Cost (₹)"],
+        ["1", "Cost of Land", format_indian_number(land_cost), "-"],
+        ["2", "Cost of Construction of Buildings", format_indian_number(building_cost), "-"],
+        ["3", "Cost of Internal/External Development Works", format_indian_number(infra_cost), "-"],
+        ["4", "Administrative and Other Costs", format_indian_number(other_cost), "-"],
+        ["", "TOTAL PROJECT COST", format_indian_number(total_estimated), "-"],
     ]
     
-    cost_table = Table(cost_data, colWidths=[0.5*inch, 4*inch, 1.8*inch])
+    cost_table = Table(cost_data, colWidths=[0.5*inch, 3*inch, 1.5*inch, 1.3*inch])
     cost_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('BACKGROUND', (0, 1), (-1, 1), colors.Color(0.9, 0.9, 0.95)),
-        ('BACKGROUND', (0, 7), (-1, 7), colors.Color(0.9, 0.9, 0.95)),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.95, 0.95, 0.95)),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, 1), (1, 1), 'Helvetica-Bold'),
-        ('FONTNAME', (0, 7), (1, 7), 'Helvetica-Bold'),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
     ]))
     elements.append(cost_table)
     elements.append(Spacer(1, 20))
     
-    # Section 2: Cost Incurred
-    elements.append(Paragraph("<b>2. COST INCURRED TILL DATE</b>", HEADER_STYLE))
+    # Bank Account Details
+    elements.append(Paragraph("<b>DESIGNATED BANK ACCOUNT DETAILS</b>", HEADER_STYLE))
     elements.append(Spacer(1, 8))
     
-    total_land_incurred = (
-        cost.get('land_acquisition_cost', 0) + cost.get('development_rights_premium', 0) +
-        cost.get('tdr_cost', 0) + cost.get('stamp_duty', 0) + cost.get('government_charges', 0)
-    )
-    total_dev_incurred = cost.get('total_cost_incurred', 0) - total_land_incurred
-    
-    incurred_data = [
-        ["", "Particulars", "Amount (₹)"],
-        ["2.i", "Land cost incurred", format_currency(total_land_incurred)],
-        ["2.ii", "Development cost incurred", format_currency(total_dev_incurred)],
-        ["", "TOTAL COST INCURRED", format_currency(total_land_incurred + total_dev_incurred)],
+    bank_data = [
+        ["Bank Name:", project.get('bank_name', '________________________')],
+        ["Account Number:", project.get('bank_account_number', '________________________')],
+        ["IFSC Code:", project.get('bank_ifsc', '________________________')],
+        ["Branch:", project.get('bank_branch', '________________________')],
     ]
     
-    incurred_table = Table(incurred_data, colWidths=[0.5*inch, 4*inch, 1.8*inch])
-    incurred_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+    bank_table = Table(bank_data, colWidths=[1.5*inch, 4*inch])
+    bank_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
-    elements.append(incurred_table)
+    elements.append(bank_table)
+    elements.append(Spacer(1, 25))
+    
+    # Closing
+    elements.append(Paragraph("<b>Yours Faithfully,</b>", BODY_STYLE))
     elements.append(Spacer(1, 30))
     
-    # Certification
-    cert_text = """
-    I/We hereby certify that the above information is true and correct based on the books of accounts 
-    and records maintained by the Promoter.
-    """
-    elements.append(Paragraph(cert_text, BODY_STYLE))
-    elements.append(Spacer(1, 30))
-    
-    # Signature
+    # Signature block
     sig_data = [
-        ["Chartered Accountant", "Place: ________________"],
-        [f"Name: {project.get('ca_name', '_________________')}", f"Date: {datetime.now().strftime('%d/%m/%Y')}"],
-        [f"Firm: {project.get('ca_firm_name', '_________________')}", ""],
-        [f"Membership No: {project.get('ca_membership_number', '_________________')}", ""],
+        ["_______________________________", ""],
+        ["Signature & Name of Chartered Accountant", ""],
+        [f"Name: {project.get('ca_name', '________________________')}", ""],
+        [f"Membership No.: {project.get('ca_membership', '________________________')}", ""],
+        [f"Firm Registration No.: {project.get('ca_firm_reg', '________________________')}", ""],
     ]
-    sig_table = Table(sig_data, colWidths=[3.5*inch, 3*inch])
+    sig_table = Table(sig_data, colWidths=[4*inch, 2*inch])
     sig_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
     ]))
     elements.append(sig_table)
     
@@ -573,104 +681,106 @@ def generate_form4_pdf(project, project_cost, estimated_dev_cost, quarter, year)
 
 def generate_annexure_a_pdf(project, sales, buildings, quarter, year):
     """
-    Annexure-A: Statement of Sales and Receivables
+    ANNEXURE-A: Statement of Receivables from Allottees
+    Official Goa RERA Format
     """
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), topMargin=0.4*inch, bottomMargin=0.4*inch,
+                           leftMargin=0.5*inch, rightMargin=0.5*inch)
     elements = []
     
     # Header
-    elements.append(Paragraph("ANNEXURE - A", TITLE_STYLE))
-    elements.append(Paragraph("STATEMENT OF SALES AND RECEIVABLES", SUBTITLE_STYLE))
+    elements.append(Paragraph("<b>ANNEXURE - A</b>", TITLE_STYLE))
+    elements.append(Paragraph("Statement of Receivables from Allottees", SUBTITLE_STYLE))
+    elements.append(Spacer(1, 8))
+    
+    # Project Info
+    project_info = f"""<b>Project:</b> {project.get('project_name', '')} | 
+    <b>RERA No:</b> {project.get('rera_number', '')} | 
+    <b>Quarter:</b> {quarter} {year}
+    """
+    elements.append(Paragraph(project_info, BODY_STYLE))
     elements.append(Spacer(1, 12))
     
-    # Project Details
-    project_info = [
-        ["Project:", project.get('project_name', ''), "RERA No:", project.get('rera_number', ''), "Quarter:", f"{quarter} {year}"],
+    # Sales Table Headers
+    headers = [
+        "Sr.", "Unit\nNo.", "Building/\nWing", "Type", "Area\n(sq.m.)", 
+        "Agreement\nValue (₹)", "Amount\nReceived (₹)", "Balance\nDue (₹)", 
+        "Due\nDate", "Allottee\nName"
     ]
-    project_table = Table(project_info, colWidths=[0.8*inch, 2.5*inch, 0.8*inch, 2*inch, 0.8*inch, 1*inch])
-    project_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (4, 0), (4, 0), 'Helvetica-Bold'),
-    ]))
-    elements.append(project_table)
-    elements.append(Spacer(1, 15))
     
-    # Sales Table
-    headers = ["Sr.", "Unit No.", "Building", "Carpet\nArea (sqm)", "Buyer Name", "Agreement\nDate", 
-               "Sale Value (₹)", "Received (₹)", "Balance (₹)"]
     table_data = [headers]
     
-    total_sale_value = 0
+    # Build sales data
+    building_lookup = {b.get('building_id'): b.get('building_name', '') for b in (buildings or [])}
+    
+    total_value = 0
     total_received = 0
     total_balance = 0
     
-    for idx, sale in enumerate(sales, 1):
-        sale_value = sale.get('sale_value', 0)
-        received = sale.get('amount_received', 0)
-        balance = sale_value - received
+    for idx, sale in enumerate(sales or [], 1):
+        agreement_value = sale.get('agreement_value', 0)
+        amount_received = sale.get('amount_received', 0)
+        balance = agreement_value - amount_received
         
-        total_sale_value += sale_value
-        total_received += received
+        total_value += agreement_value
+        total_received += amount_received
         total_balance += balance
         
         row = [
             str(idx),
             sale.get('unit_number', ''),
-            sale.get('building_name', ''),
-            f"{sale.get('carpet_area', 0):.2f}",
-            sale.get('buyer_name', '-'),
-            format_date(sale.get('agreement_date', '')),
-            format_currency(sale_value),
-            format_currency(received),
-            format_currency(balance)
+            building_lookup.get(sale.get('building_id'), sale.get('building_id', '')),
+            sale.get('unit_type', ''),
+            str(sale.get('carpet_area', '')),
+            format_indian_number(agreement_value),
+            format_indian_number(amount_received),
+            format_indian_number(balance),
+            format_date(sale.get('due_date', '')),
+            sale.get('allottee_name', '')
         ]
         table_data.append(row)
     
-    # Total row
+    # Add total row
     table_data.append([
-        "", "TOTAL", "", "", "", "",
-        format_currency(total_sale_value),
-        format_currency(total_received),
-        format_currency(total_balance)
+        "", "", "", "", "TOTAL",
+        format_indian_number(total_value),
+        format_indian_number(total_received),
+        format_indian_number(total_balance),
+        "", ""
     ])
     
-    col_widths = [0.4*inch, 0.8*inch, 0.8*inch, 0.7*inch, 1.8*inch, 0.9*inch, 1.1*inch, 1.1*inch, 1.1*inch]
+    if len(table_data) == 1:
+        table_data.append(["", "No sales data available", "", "", "", "", "", "", "", ""])
+    
+    # Create table
+    col_widths = [0.4*inch, 0.6*inch, 0.8*inch, 0.6*inch, 0.6*inch, 
+                  1.1*inch, 1.1*inch, 1*inch, 0.8*inch, 1.5*inch]
+    
     sales_table = Table(table_data, colWidths=col_widths)
     sales_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.95, 0.95, 0.95)),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (3, 0), (3, -1), 'CENTER'),
-        ('ALIGN', (6, 0), (-1, -1), 'RIGHT'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (5, 1), (7, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
     ]))
     elements.append(sales_table)
     elements.append(Spacer(1, 20))
     
     # Summary
-    summary_data = [
-        ["Summary:", ""],
-        ["Total Units Sold:", str(len(sales))],
-        ["Total Sale Value:", format_currency(total_sale_value)],
-        ["Total Amount Received:", format_currency(total_received)],
-        ["Total Balance Receivable:", format_currency(total_balance)],
-    ]
-    summary_table = Table(summary_data, colWidths=[2*inch, 2*inch])
-    summary_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-    ]))
-    elements.append(summary_table)
+    summary_text = f"""<b>Summary:</b> Total Units: {len(sales or [])} | 
+    Total Agreement Value: ₹{format_indian_number(total_value)} | 
+    Total Received: ₹{format_indian_number(total_received)} | 
+    Total Balance Due: ₹{format_indian_number(total_balance)}
+    """
+    elements.append(Paragraph(summary_text, BODY_STYLE))
     
     doc.build(elements)
     buffer.seek(0)
