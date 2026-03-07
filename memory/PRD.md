@@ -85,23 +85,41 @@
 - [x] Bulk Add feature - create multiple buildings with same configuration
 - [x] Enhanced table display with Type, Parking (B/S/U), Floors columns
 
-### Construction Progress (FORM-1 Table A)
-- [x] 16 default construction activities with weightages
+### Construction Progress (FORM-1 - Comprehensive Update March 2026)
+- [x] 16 default construction activities with weightages (legacy)
 - [x] Per-building activity completion tracking
 - [x] Quarterly progress entry
 - [x] Overall weighted completion calculation
-- [x] **NEW**: FORM-1 Table A structured activities (10 categories matching RERA format)
-- [x] **NEW**: API endpoint for FORM-1 Table A template
+- [x] **NEW**: Comprehensive 12-category, 48-activity tracking system:
+  - a) Completion of Plinth (10.89%) - 11 activities
+  - b) Completion of Slabs at all levels (31.78%) - 7 activities
+  - c) Brickwork and Plastering (12.71%) - 7 activities
+  - d) Plumbing (3.93%) - 3 activities
+  - e) Electrical Works (9.08%) - 5 activities
+  - f) Aluminium/UPVC Windows (8.02%) - 2 activities
+  - g) Tiling/Flooring (8.02%) - 3 activities
+  - h) Door Shutter Fixing (2.42%) - 2 activities
+  - i) Water Proofing (2.42%) - 1 activity
+  - j) Painting (8.32%) - 4 activities
+  - k) Carpark (0.76%) - 2 activities
+  - l) Intimation of Handover (1.66%) - 1 activity
+- [x] **NEW**: N/A (Not Applicable) checkbox for each activity
+- [x] **NEW**: Automatic weightage recalibration when activities marked N/A
+- [x] **NEW**: Category-wise completion percentage display
+- [x] **NEW**: Expandable/collapsible category sections
+- [x] **NEW**: Infrastructure Works tab (9 items, 100% total)
 
-### Common Development Works (FORM-1 Table B)
-- [x] **NEW**: Internal Roads & Footpaths
-- [x] **NEW**: Water Supply, Sewerage, Storm Drains
-- [x] **NEW**: Landscaping, Street Lighting
-- [x] **NEW**: Community Buildings, Sewage Treatment
-- [x] **NEW**: Rainwater Harvesting, Energy Management
-- [x] **NEW**: Fire Safety, Electrical Infrastructure
-- [x] **NEW**: Proposed/Not Proposed flags for each item
-- [x] **NEW**: Overall completion calculation
+### Project Infrastructure Works (FORM-1 Table B - NEW)
+- [x] **NEW**: Road, Foot-path and storm water drain (25%)
+- [x] **NEW**: Underground sewage drainage network (15%)
+- [x] **NEW**: Sewage Treatment Plant (10%)
+- [x] **NEW**: Over-head and Sump water reservoir/Tank (10%)
+- [x] **NEW**: Underground water distribution network (12.5%)
+- [x] **NEW**: Electric Substation & Underground cables (12.5%)
+- [x] **NEW**: Street Lights (5%)
+- [x] **NEW**: Entry Gate (3%)
+- [x] **NEW**: Boundary Wall (7%)
+- [x] **NEW**: N/A support with auto-recalibration
 
 ### Project Costs (FORM-3 & FORM-4 - Enhanced)
 - [x] Land costs (acquisition, TDR, stamp duty, etc.)

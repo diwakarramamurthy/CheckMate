@@ -214,63 +214,150 @@ class BuildingResponse(BuildingBase):
     created_at: str
     total_parking_floors: int = 0
 
-# FORM-1 Table A: Building-wise construction activities (RERA standard)
-class Form1TableAActivities(BaseModel):
-    excavation: float = 0
-    basement_plinth: float = 0  # Basement(s) and Plinth
-    podiums: float = 0
-    stilt_floor: float = 0
-    super_structure_slabs: float = 0  # Slabs of Super Structure
-    internal_works: float = 0  # Internal walls, plaster, flooring within flats
-    doors_windows_fittings: float = 0  # Doors, Windows, Sanitary, Electrical within flats
-    staircases_lifts_lobbies: float = 0  # Staircases, Lift wells, Lobbies, OH/UG tanks
-    external_finishing: float = 0  # External plumbing, plaster, elevation, terrace waterproofing
-    final_installations: float = 0  # Lifts, pumps, fire fighting, electrical, compound wall etc.
+# Comprehensive Construction Progress - Building Works (Based on detailed tracking sheet)
+# Each activity has: completion (0-100), is_applicable (True/False for N/A), base_weightage
 
-# FORM-1 Table B: Common Development Works (entire phase)
-class Form1TableBWorks(BaseModel):
-    internal_roads_footpaths: float = 0
-    internal_roads_proposed: bool = True
-    water_supply: float = 0
-    water_supply_proposed: bool = True
-    sewerage: float = 0  # Chamber, lines, Septic Tank, STP
-    sewerage_proposed: bool = True
-    storm_water_drains: float = 0
-    storm_water_proposed: bool = True
-    landscaping_trees: float = 0
-    landscaping_proposed: bool = True
-    street_lighting: float = 0
-    street_lighting_proposed: bool = True
-    community_buildings: float = 0
-    community_buildings_proposed: bool = False
-    sewage_treatment: float = 0
-    sewage_treatment_proposed: bool = True
-    solid_waste_management: float = 0
-    solid_waste_proposed: bool = True
-    rainwater_harvesting: float = 0
-    rainwater_proposed: bool = True
-    energy_management: float = 0
-    energy_management_proposed: bool = False
-    fire_safety: float = 0
-    fire_safety_proposed: bool = True
-    electrical_infrastructure: float = 0  # Meter room, substation, receiving station
-    electrical_proposed: bool = True
-    other_works: float = 0
-    other_works_details: Optional[str] = None
+class ActivityItem(BaseModel):
+    completion: float = 0  # 0-100%
+    is_applicable: bool = True  # False = N/A, will recalibrate weightage
+    base_weightage: float = 0  # Original weightage before recalibration
 
+# a) Completion of Plinth - 10.89%
+class PlinthCompletion(BaseModel):
+    excavation: ActivityItem = ActivityItem(base_weightage=0.90)
+    pcc_below_footing: ActivityItem = ActivityItem(base_weightage=0.80)
+    shuttering_for_footing: ActivityItem = ActivityItem(base_weightage=0.90)
+    reinforcement_footing_column: ActivityItem = ActivityItem(base_weightage=1.70)
+    concreting_for_footing: ActivityItem = ActivityItem(base_weightage=1.50)
+    shuttering_column_to_plinth: ActivityItem = ActivityItem(base_weightage=0.50)
+    concreting_for_column: ActivityItem = ActivityItem(base_weightage=1.79)
+    shuttering_plinth_beam: ActivityItem = ActivityItem(base_weightage=0.70)
+    reinforcement_plinth_beam: ActivityItem = ActivityItem(base_weightage=1.00)
+    concreting_plinth_beam: ActivityItem = ActivityItem(base_weightage=0.80)
+    filling_earth_plinth_pcc: ActivityItem = ActivityItem(base_weightage=0.30)
+
+# b) Completion of Slabs at all levels - 31.78% (divided by number of floors)
+class SlabCompletion(BaseModel):
+    reinforcement_lintel_roof: ActivityItem = ActivityItem(base_weightage=6.00)
+    shuttering_for_column: ActivityItem = ActivityItem(base_weightage=4.40)
+    concreting_for_column: ActivityItem = ActivityItem(base_weightage=5.00)
+    shuttering_beams_roof: ActivityItem = ActivityItem(base_weightage=4.80)
+    reinforcement_beams_roof: ActivityItem = ActivityItem(base_weightage=6.00)
+    concreting_beams_roof: ActivityItem = ActivityItem(base_weightage=4.00)
+    dismantling_roof_shuttering: ActivityItem = ActivityItem(base_weightage=1.58)
+
+# c) Completion of Brickwork and Plastering - 12.71%
+class BrickworkPlastering(BaseModel):
+    brickwork_external_walls: ActivityItem = ActivityItem(base_weightage=2.50)
+    brickwork_internal_walls: ActivityItem = ActivityItem(base_weightage=2.80)
+    fixing_door_window_frames: ActivityItem = ActivityItem(base_weightage=1.50)
+    fixing_concealed_pipes: ActivityItem = ActivityItem(base_weightage=1.40)
+    plastering_external_walls: ActivityItem = ActivityItem(base_weightage=1.30)
+    plastering_internal_walls: ActivityItem = ActivityItem(base_weightage=1.80)
+    waterproof_plastering_toilets: ActivityItem = ActivityItem(base_weightage=1.41)
+
+# d) Plumbing - 3.93%
+class Plumbing(BaseModel):
+    fixing_water_pipes: ActivityItem = ActivityItem(base_weightage=1.40)
+    fixing_wc_pipes_traps: ActivityItem = ActivityItem(base_weightage=1.30)
+    fixing_plumbing_fixtures: ActivityItem = ActivityItem(base_weightage=1.23)
+
+# e) Electrical works - 9.08%
+class ElectricalWorks(BaseModel):
+    laying_all_cables: ActivityItem = ActivityItem(base_weightage=3.00)
+    fixing_electrical_fixtures: ActivityItem = ActivityItem(base_weightage=2.00)
+    electrical_breaker_box: ActivityItem = ActivityItem(base_weightage=2.00)
+    electric_meter_box: ActivityItem = ActivityItem(base_weightage=1.00)
+    connecting_cable_electrical_box: ActivityItem = ActivityItem(base_weightage=1.08)
+
+# f) Aluminium/UPVC window - 8.02%
+class WindowWorks(BaseModel):
+    fixing_frames: ActivityItem = ActivityItem(base_weightage=4.40)
+    fixing_glass: ActivityItem = ActivityItem(base_weightage=3.62)
+
+# g) Tiling/flooring - 8.02%
+class TilingFlooring(BaseModel):
+    laying_floor_tiles: ActivityItem = ActivityItem(base_weightage=3.00)
+    laying_wall_tiles_kitchen_bathroom: ActivityItem = ActivityItem(base_weightage=2.80)
+    laying_granite_kitchen_counter: ActivityItem = ActivityItem(base_weightage=2.22)
+
+# h) Door shutter fixing - 2.42%
+class DoorShutterFixing(BaseModel):
+    fixing_door_shutters: ActivityItem = ActivityItem(base_weightage=1.30)
+    fixing_locks_handles: ActivityItem = ActivityItem(base_weightage=1.12)
+
+# i) Water Proofing - 2.42%
+class WaterProofing(BaseModel):
+    terrace_roof_waterproofing: ActivityItem = ActivityItem(base_weightage=2.42)
+
+# j) Painting - 8.32%
+class Painting(BaseModel):
+    painting_ceiling: ActivityItem = ActivityItem(base_weightage=2.30)
+    painting_walls: ActivityItem = ActivityItem(base_weightage=2.80)
+    painting_grills: ActivityItem = ActivityItem(base_weightage=1.80)
+    painting_doors_windows: ActivityItem = ActivityItem(base_weightage=1.42)
+
+# k) Carpark - 0.76%
+class Carpark(BaseModel):
+    levelling: ActivityItem = ActivityItem(base_weightage=0.20)
+    paving: ActivityItem = ActivityItem(base_weightage=0.56)
+
+# l) Intimation of Handover - 1.66%
+class HandoverIntimation(BaseModel):
+    intimation_of_handover: ActivityItem = ActivityItem(base_weightage=1.66)
+
+# Complete Tower/Building Construction Progress
+class TowerConstructionProgress(BaseModel):
+    plinth_completion: PlinthCompletion = PlinthCompletion()
+    slab_completion: SlabCompletion = SlabCompletion()
+    brickwork_plastering: BrickworkPlastering = BrickworkPlastering()
+    plumbing: Plumbing = Plumbing()
+    electrical_works: ElectricalWorks = ElectricalWorks()
+    window_works: WindowWorks = WindowWorks()
+    tiling_flooring: TilingFlooring = TilingFlooring()
+    door_shutter_fixing: DoorShutterFixing = DoorShutterFixing()
+    water_proofing: WaterProofing = WaterProofing()
+    painting: Painting = Painting()
+    carpark: Carpark = Carpark()
+    handover_intimation: HandoverIntimation = HandoverIntimation()
+
+# Project Infrastructure Works - 100% total
+class InfrastructureActivityItem(BaseModel):
+    completion: float = 0
+    is_applicable: bool = True
+    base_weightage: float = 0
+
+class ProjectInfrastructureWorks(BaseModel):
+    road_footpath_storm_drain: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=25.0)
+    underground_sewage_network: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=15.0)
+    sewage_treatment_plant: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=10.0)
+    overhead_sump_reservoir: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=10.0)
+    underground_water_distribution: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=12.5)
+    electric_substation_cables: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=12.5)
+    street_lights: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=5.0)
+    entry_gate: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=3.0)
+    boundary_wall: InfrastructureActivityItem = InfrastructureActivityItem(base_weightage=7.0)
+
+# Legacy/Simple activity model for backward compatibility
 class ConstructionActivityBase(BaseModel):
     activity_name: str
     weightage: float
     completion_percentage: float = 0
+    is_applicable: bool = True  # For N/A support
 
 class ConstructionProgressBase(BaseModel):
     building_id: str
     quarter: str
     year: int
-    activities: List[ConstructionActivityBase]
+    # Legacy activities list
+    activities: List[ConstructionActivityBase] = []
     overall_completion: float = 0
-    # FORM-1 Table A structured activities
-    form1_table_a: Optional[Form1TableAActivities] = None
+    # NEW: Detailed tower construction progress
+    tower_progress: Optional[TowerConstructionProgress] = None
+    # Number of floors for slab weightage calculation
+    number_of_floors: int = 1
+    # Recalibrated weightages after N/A items removed
+    recalibrated_total_weightage: float = 100.0
 
 class ConstructionProgressCreate(ConstructionProgressBase):
     pass
@@ -280,13 +367,33 @@ class ConstructionProgressResponse(ConstructionProgressBase):
     progress_id: str
     project_id: str
     created_at: str
+    # Calculated fields
+    tower_completion_percentage: float = 0
+    category_completions: Dict[str, float] = {}
 
-# Project-level Common Development Works Progress (Form-1 Table B)
+# Project-level Infrastructure Works Progress
+class InfrastructureProgressBase(BaseModel):
+    project_id: str
+    quarter: str
+    year: int
+    infrastructure_works: ProjectInfrastructureWorks = ProjectInfrastructureWorks()
+    overall_completion: float = 0
+    recalibrated_total_weightage: float = 100.0
+
+class InfrastructureProgressCreate(InfrastructureProgressBase):
+    pass
+
+class InfrastructureProgressResponse(InfrastructureProgressBase):
+    model_config = ConfigDict(extra="ignore")
+    progress_id: str
+    created_at: str
+
+# Common Development Works (backward compatibility for existing code)
 class CommonDevelopmentWorksBase(BaseModel):
     project_id: str
     quarter: str
     year: int
-    works: Form1TableBWorks
+    works: Dict[str, Any] = {}
     overall_completion: float = 0
 
 class CommonDevelopmentWorksCreate(CommonDevelopmentWorksBase):
@@ -917,25 +1024,351 @@ async def get_construction_progress(
 async def get_default_activities():
     return DEFAULT_ACTIVITIES
 
-# Get FORM-1 Table A activity template (RERA standard)
-@api_router.get("/construction-progress/form1-table-a-template")
-async def get_form1_table_a_template():
-    """Returns the FORM-1 Table A activity structure with descriptions"""
+# Get comprehensive construction progress template with all activities
+@api_router.get("/construction-progress/detailed-template")
+async def get_detailed_construction_template():
+    """Returns the comprehensive construction progress tracking template"""
     return {
-        "activities": [
-            {"field": "excavation", "label": "Excavation", "weightage": 5, "description": "Site excavation and preparation"},
-            {"field": "basement_plinth", "label": "Basement(s) and Plinth", "weightage": 10, "description": "Basement construction and plinth level"},
-            {"field": "podiums", "label": "Podiums", "weightage": 5, "description": "Podium floors construction"},
-            {"field": "stilt_floor", "label": "Stilt Floor", "weightage": 5, "description": "Stilt parking level"},
-            {"field": "super_structure_slabs", "label": "Slabs of Super Structure", "weightage": 20, "description": "RCC slabs for all floors"},
-            {"field": "internal_works", "label": "Internal Works", "weightage": 12, "description": "Internal walls, plaster, flooring within flats/premises"},
-            {"field": "doors_windows_fittings", "label": "Doors, Windows & Fittings", "weightage": 10, "description": "Doors, windows, sanitary fittings, electrical fittings within flat/premises"},
-            {"field": "staircases_lifts_lobbies", "label": "Staircases, Lifts & Tanks", "weightage": 10, "description": "Staircases, lift wells, lobbies, overhead and underground water tanks"},
-            {"field": "external_finishing", "label": "External Finishing", "weightage": 10, "description": "External plumbing, plaster, elevation, terrace waterproofing"},
-            {"field": "final_installations", "label": "Final Installations", "weightage": 13, "description": "Lifts, pumps, fire fighting, electrical to common areas, compound wall, occupation certificate requirements"}
-        ],
-        "total_weightage": 100
+        "tower_construction": {
+            "total_weightage": 100,
+            "categories": [
+                {
+                    "id": "plinth_completion",
+                    "name": "Completion of Plinth",
+                    "total_weightage": 10.89,
+                    "activities": [
+                        {"id": "excavation", "name": "Excavation", "weightage": 0.90},
+                        {"id": "pcc_below_footing", "name": "PCC below footing", "weightage": 0.80},
+                        {"id": "shuttering_for_footing", "name": "Shuttering for Footing", "weightage": 0.90},
+                        {"id": "reinforcement_footing_column", "name": "Reinforcement for Footing and Column", "weightage": 1.70},
+                        {"id": "concreting_for_footing", "name": "Concreting for Footing", "weightage": 1.50},
+                        {"id": "shuttering_column_to_plinth", "name": "Shuttering for Column up to Plinth", "weightage": 0.50},
+                        {"id": "concreting_for_column", "name": "Concreting for Column", "weightage": 1.79},
+                        {"id": "shuttering_plinth_beam", "name": "Shuttering for Plinth Beam", "weightage": 0.70},
+                        {"id": "reinforcement_plinth_beam", "name": "Reinforcement for Plinth Beam", "weightage": 1.00},
+                        {"id": "concreting_plinth_beam", "name": "Concreting for Plinth Beam", "weightage": 0.80},
+                        {"id": "filling_earth_plinth_pcc", "name": "Filling earth within Plinth and PCC", "weightage": 0.30}
+                    ]
+                },
+                {
+                    "id": "slab_completion",
+                    "name": "Completion of Slabs at all levels",
+                    "total_weightage": 31.78,
+                    "note": "Divide by number of floors from Buildings section",
+                    "activities": [
+                        {"id": "reinforcement_lintel_roof", "name": "Reinforcement up to Lintel/Roof bottom", "weightage": 6.00},
+                        {"id": "shuttering_for_column", "name": "Shuttering for Column", "weightage": 4.40},
+                        {"id": "concreting_for_column", "name": "Concreting for Column", "weightage": 5.00},
+                        {"id": "shuttering_beams_roof", "name": "Shuttering for Beams and Roof", "weightage": 4.80},
+                        {"id": "reinforcement_beams_roof", "name": "Reinforcement for Beams and Roof", "weightage": 6.00},
+                        {"id": "concreting_beams_roof", "name": "Concreting for Beams and Roof", "weightage": 4.00},
+                        {"id": "dismantling_roof_shuttering", "name": "Dismantling of Roof Shuttering", "weightage": 1.58}
+                    ]
+                },
+                {
+                    "id": "brickwork_plastering",
+                    "name": "Completion of Brickwork and Plastering",
+                    "total_weightage": 12.71,
+                    "activities": [
+                        {"id": "brickwork_external_walls", "name": "Brickwork External walls", "weightage": 2.50},
+                        {"id": "brickwork_internal_walls", "name": "Brickwork Internal walls", "weightage": 2.80},
+                        {"id": "fixing_door_window_frames", "name": "Fixing of Door/Window frames", "weightage": 1.50},
+                        {"id": "fixing_concealed_pipes", "name": "Fixing concealed Water & Electric pipes", "weightage": 1.40},
+                        {"id": "plastering_external_walls", "name": "Plastering External walls", "weightage": 1.30},
+                        {"id": "plastering_internal_walls", "name": "Plastering Internal walls", "weightage": 1.80},
+                        {"id": "waterproof_plastering_toilets", "name": "Water-proof Plastering of Toilets", "weightage": 1.41}
+                    ]
+                },
+                {
+                    "id": "plumbing",
+                    "name": "Plumbing",
+                    "total_weightage": 3.93,
+                    "activities": [
+                        {"id": "fixing_water_pipes", "name": "Fixing External & Internal Water Pipes", "weightage": 1.40},
+                        {"id": "fixing_wc_pipes_traps", "name": "Fixing External & Internal WC Pipes & Traps", "weightage": 1.30},
+                        {"id": "fixing_plumbing_fixtures", "name": "Fixing of all Plumbing fixtures", "weightage": 1.23}
+                    ]
+                },
+                {
+                    "id": "electrical_works",
+                    "name": "Electrical Works",
+                    "total_weightage": 9.08,
+                    "activities": [
+                        {"id": "laying_all_cables", "name": "Laying all Cables (Internal)", "weightage": 3.00},
+                        {"id": "fixing_electrical_fixtures", "name": "Fixing all Electrical fixtures (Internal)", "weightage": 2.00},
+                        {"id": "electrical_breaker_box", "name": "Electrical/Breaker Box (External)", "weightage": 2.00},
+                        {"id": "electric_meter_box", "name": "Electric meter box (External)", "weightage": 1.00},
+                        {"id": "connecting_cable_electrical_box", "name": "Connecting cable to the Electrical box", "weightage": 1.08}
+                    ]
+                },
+                {
+                    "id": "window_works",
+                    "name": "Aluminium/UPVC Window",
+                    "total_weightage": 8.02,
+                    "activities": [
+                        {"id": "fixing_frames", "name": "Fixing of frames", "weightage": 4.40},
+                        {"id": "fixing_glass", "name": "Fixing of Glass", "weightage": 3.62}
+                    ]
+                },
+                {
+                    "id": "tiling_flooring",
+                    "name": "Tiling/Flooring",
+                    "total_weightage": 8.02,
+                    "activities": [
+                        {"id": "laying_floor_tiles", "name": "Laying of Floor tiles", "weightage": 3.00},
+                        {"id": "laying_wall_tiles_kitchen_bathroom", "name": "Laying of Wall tiles Kitchen & Bathroom", "weightage": 2.80},
+                        {"id": "laying_granite_kitchen_counter", "name": "Laying of Granite/Kadapa slab for Kitchen Counter", "weightage": 2.22}
+                    ]
+                },
+                {
+                    "id": "door_shutter_fixing",
+                    "name": "Door Shutter Fixing",
+                    "total_weightage": 2.42,
+                    "activities": [
+                        {"id": "fixing_door_shutters", "name": "Fixing of Door shutters", "weightage": 1.30},
+                        {"id": "fixing_locks_handles", "name": "Fixing of locks, handles & accessories", "weightage": 1.12}
+                    ]
+                },
+                {
+                    "id": "water_proofing",
+                    "name": "Water Proofing",
+                    "total_weightage": 2.42,
+                    "activities": [
+                        {"id": "terrace_roof_waterproofing", "name": "Terrace roof water proofing", "weightage": 2.42}
+                    ]
+                },
+                {
+                    "id": "painting",
+                    "name": "Painting",
+                    "total_weightage": 8.32,
+                    "activities": [
+                        {"id": "painting_ceiling", "name": "Ceiling", "weightage": 2.30},
+                        {"id": "painting_walls", "name": "Walls", "weightage": 2.80},
+                        {"id": "painting_grills", "name": "Grills", "weightage": 1.80},
+                        {"id": "painting_doors_windows", "name": "Doors/Windows", "weightage": 1.42}
+                    ]
+                },
+                {
+                    "id": "carpark",
+                    "name": "Carpark",
+                    "total_weightage": 0.76,
+                    "activities": [
+                        {"id": "levelling", "name": "Levelling", "weightage": 0.20},
+                        {"id": "paving", "name": "Paving", "weightage": 0.56}
+                    ]
+                },
+                {
+                    "id": "handover_intimation",
+                    "name": "Intimation of Handover",
+                    "total_weightage": 1.66,
+                    "activities": [
+                        {"id": "intimation_of_handover", "name": "Intimation of Handover", "weightage": 1.66}
+                    ]
+                }
+            ]
+        },
+        "infrastructure_works": {
+            "total_weightage": 100,
+            "activities": [
+                {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 25.0},
+                {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 15.0},
+                {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 10.0},
+                {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 10.0},
+                {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 12.5},
+                {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 12.5},
+                {"id": "street_lights", "name": "Street Lights", "weightage": 5.0},
+                {"id": "entry_gate", "name": "Entry Gate", "weightage": 3.0},
+                {"id": "boundary_wall", "name": "Boundary wall", "weightage": 7.0}
+            ]
+        }
     }
+
+# Calculate recalibrated weightage after N/A items
+def calculate_recalibrated_completion(activities_data: dict, template_categories: list) -> tuple:
+    """Calculate completion with recalibrated weightages for N/A items"""
+    total_applicable_weightage = 0
+    weighted_completion = 0
+    category_completions = {}
+    
+    for category in template_categories:
+        cat_id = category["id"]
+        cat_data = activities_data.get(cat_id, {})
+        cat_applicable_weightage = 0
+        cat_weighted_completion = 0
+        
+        for activity in category["activities"]:
+            act_id = activity["id"]
+            act_data = cat_data.get(act_id, {})
+            
+            # Check if activity is applicable (not N/A)
+            is_applicable = act_data.get("is_applicable", True)
+            if is_applicable:
+                base_weightage = activity["weightage"]
+                completion = act_data.get("completion", 0)
+                
+                total_applicable_weightage += base_weightage
+                cat_applicable_weightage += base_weightage
+                
+                weighted_completion += base_weightage * completion / 100
+                cat_weighted_completion += base_weightage * completion / 100
+        
+        # Calculate category completion percentage
+        if cat_applicable_weightage > 0:
+            category_completions[cat_id] = round(cat_weighted_completion / cat_applicable_weightage * 100, 2)
+        else:
+            category_completions[cat_id] = 0  # All N/A
+    
+    # Calculate overall completion (recalibrated)
+    overall_completion = 0
+    if total_applicable_weightage > 0:
+        overall_completion = weighted_completion / total_applicable_weightage * 100
+    
+    return round(overall_completion, 2), total_applicable_weightage, category_completions
+
+# Save detailed construction progress with N/A support
+@api_router.post("/construction-progress/detailed")
+async def create_detailed_construction_progress(
+    building_id: str,
+    quarter: str,
+    year: int,
+    tower_activities: Dict[str, Any],
+    number_of_floors: int = 1,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save detailed tower construction progress with N/A support and weightage recalibration"""
+    # Get building to get project_id
+    building = await db.buildings.find_one({"building_id": building_id})
+    if not building:
+        raise HTTPException(status_code=404, detail="Building not found")
+    
+    # Get template for recalibration
+    template = await get_detailed_construction_template()
+    categories = template["tower_construction"]["categories"]
+    
+    # Calculate recalibrated completion
+    overall_completion, total_applicable_weightage, category_completions = calculate_recalibrated_completion(
+        tower_activities, categories
+    )
+    
+    progress_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    progress_doc = {
+        "progress_id": progress_id,
+        "project_id": building["project_id"],
+        "building_id": building_id,
+        "quarter": quarter,
+        "year": year,
+        "tower_activities": tower_activities,
+        "number_of_floors": number_of_floors,
+        "overall_completion": overall_completion,
+        "recalibrated_total_weightage": total_applicable_weightage,
+        "category_completions": category_completions,
+        "created_at": now
+    }
+    
+    # Upsert
+    await db.construction_progress.update_one(
+        {"building_id": building_id, "quarter": quarter, "year": year},
+        {"$set": progress_doc},
+        upsert=True
+    )
+    
+    return progress_doc
+
+# =========================
+# INFRASTRUCTURE PROGRESS ROUTES
+# =========================
+
+@api_router.post("/infrastructure-progress")
+async def create_infrastructure_progress(
+    project_id: str,
+    quarter: str,
+    year: int,
+    activities: Dict[str, Any],
+    current_user: dict = Depends(get_current_user)
+):
+    """Save infrastructure works progress with N/A support and recalibration"""
+    # Get infrastructure template
+    infrastructure_template = [
+        {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 25.0},
+        {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 15.0},
+        {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 10.0},
+        {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 10.0},
+        {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 12.5},
+        {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 12.5},
+        {"id": "street_lights", "name": "Street Lights", "weightage": 5.0},
+        {"id": "entry_gate", "name": "Entry Gate", "weightage": 3.0},
+        {"id": "boundary_wall", "name": "Boundary wall", "weightage": 7.0}
+    ]
+    
+    # Calculate recalibrated completion
+    total_applicable_weightage = 0
+    weighted_completion = 0
+    
+    for item in infrastructure_template:
+        item_id = item["id"]
+        item_data = activities.get(item_id, {})
+        is_applicable = item_data.get("is_applicable", True)
+        
+        if is_applicable:
+            completion = item_data.get("completion", 0)
+            weightage = item["weightage"]
+            total_applicable_weightage += weightage
+            weighted_completion += weightage * completion / 100
+    
+    overall_completion = 0
+    if total_applicable_weightage > 0:
+        overall_completion = weighted_completion / total_applicable_weightage * 100
+    
+    progress_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    progress_doc = {
+        "progress_id": progress_id,
+        "project_id": project_id,
+        "quarter": quarter,
+        "year": year,
+        "activities": activities,
+        "overall_completion": round(overall_completion, 2),
+        "recalibrated_total_weightage": total_applicable_weightage,
+        "created_at": now
+    }
+    
+    await db.infrastructure_progress.update_one(
+        {"project_id": project_id, "quarter": quarter, "year": year},
+        {"$set": progress_doc},
+        upsert=True
+    )
+    
+    return progress_doc
+
+@api_router.get("/infrastructure-progress")
+async def get_infrastructure_progress(
+    project_id: str = Query(...),
+    quarter: Optional[str] = None,
+    year: Optional[int] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"project_id": project_id}
+    if quarter:
+        query["quarter"] = quarter
+    if year:
+        query["year"] = year
+    
+    progress_list = await db.infrastructure_progress.find(query, {"_id": 0}).to_list(100)
+    return progress_list
+
+@api_router.get("/infrastructure-progress/latest/{project_id}")
+async def get_latest_infrastructure_progress(project_id: str, current_user: dict = Depends(get_current_user)):
+    progress = await db.infrastructure_progress.find_one(
+        {"project_id": project_id},
+        {"_id": 0},
+        sort=[("year", -1), ("quarter", -1)]
+    )
+    if not progress:
+        raise HTTPException(status_code=404, detail="No infrastructure progress data found")
+    return progress
 
 # =========================
 # PROJECT COST ROUTES (FORM-4 CA Certificate)

@@ -1838,13 +1838,20 @@ const ConstructionProgressPage = () => {
   const [selectedBuilding, setSelectedBuilding] = useState("");
   const [quarter, setQuarter] = useState("Q1");
   const [year, setYear] = useState(new Date().getFullYear());
-  const [activities, setActivities] = useState([]);
+  const [template, setTemplate] = useState(null);
+  const [towerActivities, setTowerActivities] = useState({});
+  const [infraActivities, setInfraActivities] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("tower");
+  const [expandedCategories, setExpandedCategories] = useState({});
+  const [categoryCompletions, setCategoryCompletions] = useState({});
+  const [overallCompletion, setOverallCompletion] = useState(0);
+  const [infraOverallCompletion, setInfraOverallCompletion] = useState(0);
 
   useEffect(() => {
     fetchProjects();
-    fetchDefaultActivities();
+    fetchTemplate();
   }, []);
 
   useEffect(() => {
@@ -1854,10 +1861,16 @@ const ConstructionProgressPage = () => {
   }, [selectedProject]);
 
   useEffect(() => {
-    if (selectedBuilding) {
+    if (selectedBuilding && template) {
       fetchProgress();
     }
-  }, [selectedBuilding, quarter, year]);
+  }, [selectedBuilding, quarter, year, template]);
+
+  useEffect(() => {
+    if (template) {
+      calculateCompletions();
+    }
+  }, [towerActivities, infraActivities, template]);
 
   const fetchProjects = async () => {
     const res = await axios.get(`${API}/projects`);
@@ -1871,22 +1884,57 @@ const ConstructionProgressPage = () => {
     if (res.data.length > 0) setSelectedBuilding(res.data[0].building_id);
   };
 
-  const fetchDefaultActivities = async () => {
-    const res = await axios.get(`${API}/construction-progress/default-activities`);
-    setActivities(res.data.map(a => ({ ...a, completion_percentage: 0 })));
+  const fetchTemplate = async () => {
+    try {
+      const res = await axios.get(`${API}/construction-progress/detailed-template`);
+      setTemplate(res.data);
+      // Initialize activities with default values
+      initializeActivities(res.data);
+    } catch (err) {
+      console.error("Failed to fetch template", err);
+    }
+  };
+
+  const initializeActivities = (tmpl) => {
+    const towerData = {};
+    tmpl.tower_construction.categories.forEach(cat => {
+      towerData[cat.id] = {};
+      cat.activities.forEach(act => {
+        towerData[cat.id][act.id] = { completion: 0, is_applicable: true };
+      });
+    });
+    setTowerActivities(towerData);
+
+    const infraData = {};
+    tmpl.infrastructure_works.activities.forEach(act => {
+      infraData[act.id] = { completion: 0, is_applicable: true };
+    });
+    setInfraActivities(infraData);
   };
 
   const fetchProgress = async () => {
     setLoading(true);
     try {
+      // Fetch tower progress
       const res = await axios.get(
         `${API}/construction-progress?project_id=${selectedProject}&quarter=${quarter}&year=${year}`
       );
       const existing = res.data.find(p => p.building_id === selectedBuilding);
-      if (existing) {
-        setActivities(existing.activities);
+      if (existing?.tower_activities) {
+        setTowerActivities(existing.tower_activities);
+        setCategoryCompletions(existing.category_completions || {});
+        setOverallCompletion(existing.overall_completion || 0);
       } else {
-        fetchDefaultActivities();
+        initializeActivities(template);
+      }
+
+      // Fetch infrastructure progress
+      const infraRes = await axios.get(
+        `${API}/infrastructure-progress?project_id=${selectedProject}&quarter=${quarter}&year=${year}`
+      );
+      if (infraRes.data.length > 0) {
+        setInfraActivities(infraRes.data[0].activities || {});
+        setInfraOverallCompletion(infraRes.data[0].overall_completion || 0);
       }
     } catch (err) {
       console.error(err);
@@ -1895,32 +1943,110 @@ const ConstructionProgressPage = () => {
     }
   };
 
-  const handleActivityChange = (idx, value) => {
-    const newActivities = [...activities];
-    newActivities[idx].completion_percentage = Math.min(100, Math.max(0, parseFloat(value) || 0));
-    setActivities(newActivities);
+  const calculateCompletions = () => {
+    if (!template) return;
+    
+    // Calculate tower completion
+    let totalApplicable = 0;
+    let weightedCompletion = 0;
+    const catComps = {};
+
+    template.tower_construction.categories.forEach(cat => {
+      let catApplicable = 0;
+      let catWeighted = 0;
+      
+      cat.activities.forEach(act => {
+        const actData = towerActivities[cat.id]?.[act.id] || { completion: 0, is_applicable: true };
+        if (actData.is_applicable) {
+          totalApplicable += act.weightage;
+          catApplicable += act.weightage;
+          weightedCompletion += act.weightage * (actData.completion || 0) / 100;
+          catWeighted += act.weightage * (actData.completion || 0) / 100;
+        }
+      });
+      
+      catComps[cat.id] = catApplicable > 0 ? (catWeighted / catApplicable * 100) : 0;
+    });
+
+    setCategoryCompletions(catComps);
+    setOverallCompletion(totalApplicable > 0 ? (weightedCompletion / totalApplicable * 100) : 0);
+
+    // Calculate infrastructure completion
+    let infraTotal = 0;
+    let infraWeighted = 0;
+    template.infrastructure_works.activities.forEach(act => {
+      const actData = infraActivities[act.id] || { completion: 0, is_applicable: true };
+      if (actData.is_applicable) {
+        infraTotal += act.weightage;
+        infraWeighted += act.weightage * (actData.completion || 0) / 100;
+      }
+    });
+    setInfraOverallCompletion(infraTotal > 0 ? (infraWeighted / infraTotal * 100) : 0);
   };
 
-  const calculateOverall = () => {
-    return activities.reduce((sum, a) => sum + (a.weightage * a.completion_percentage / 100), 0);
+  const handleActivityChange = (categoryId, activityId, field, value) => {
+    setTowerActivities(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...prev[categoryId],
+        [activityId]: {
+          ...prev[categoryId]?.[activityId],
+          [field]: field === 'completion' ? Math.min(100, Math.max(0, parseFloat(value) || 0)) : value
+        }
+      }
+    }));
+  };
+
+  const handleInfraChange = (activityId, field, value) => {
+    setInfraActivities(prev => ({
+      ...prev,
+      [activityId]: {
+        ...prev[activityId],
+        [field]: field === 'completion' ? Math.min(100, Math.max(0, parseFloat(value) || 0)) : value
+      }
+    }));
+  };
+
+  const toggleCategory = (categoryId) => {
+    setExpandedCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await axios.post(`${API}/construction-progress`, {
-        building_id: selectedBuilding,
-        quarter,
-        year,
-        activities,
-        overall_completion: calculateOverall()
+      // Save tower progress
+      await axios.post(`${API}/construction-progress/detailed`, null, {
+        params: {
+          building_id: selectedBuilding,
+          quarter,
+          year,
+          number_of_floors: buildings.find(b => b.building_id === selectedBuilding)?.residential_floors || 1
+        },
+        data: towerActivities,
+        headers: { 'Content-Type': 'application/json' }
       });
+
+      // Save infrastructure progress
+      await axios.post(`${API}/infrastructure-progress`, null, {
+        params: { project_id: selectedProject, quarter, year },
+        data: infraActivities,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
       toast.success("Progress saved successfully");
     } catch (err) {
       toast.error("Failed to save progress");
+      console.error(err);
     } finally {
       setSaving(false);
     }
+  };
+
+  const getCompletionColor = (pct) => {
+    if (pct >= 90) return "bg-green-500";
+    if (pct >= 50) return "bg-blue-500";
+    if (pct >= 25) return "bg-yellow-500";
+    return "bg-slate-300";
   };
 
   return (
@@ -1928,7 +2054,7 @@ const ConstructionProgressPage = () => {
       <div className="space-y-6" data-testid="construction-progress-page">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 font-heading">Construction Progress</h1>
-          <p className="text-slate-600">Track activity-wise completion for Form-1</p>
+          <p className="text-slate-600">Comprehensive tracking for Form-1 with N/A support</p>
         </div>
 
         {/* Filters */}
@@ -1970,7 +2096,7 @@ const ConstructionProgressPage = () => {
                 <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[2023, 2024, 2025, 2026].map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                    {[2023, 2024, 2025, 2026, 2027].map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -1978,67 +2104,220 @@ const ConstructionProgressPage = () => {
           </CardContent>
         </Card>
 
+        {/* Tab Navigation */}
+        <div className="flex gap-2">
+          <Button
+            variant={activeTab === "tower" ? "default" : "outline"}
+            onClick={() => setActiveTab("tower")}
+            className={activeTab === "tower" ? "bg-blue-600" : ""}
+          >
+            Tower Construction ({formatNumber(overallCompletion, 1)}%)
+          </Button>
+          <Button
+            variant={activeTab === "infrastructure" ? "default" : "outline"}
+            onClick={() => setActiveTab("infrastructure")}
+            className={activeTab === "infrastructure" ? "bg-blue-600" : ""}
+          >
+            Infrastructure Works ({formatNumber(infraOverallCompletion, 1)}%)
+          </Button>
+        </div>
+
         {/* Overall Progress */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Overall Completion: {formatNumber(calculateOverall(), 1)}%</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span>Overall Completion</span>
+              <span className="text-2xl text-blue-600">
+                {formatNumber(activeTab === "tower" ? overallCompletion : infraOverallCompletion, 1)}%
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <Progress value={calculateOverall()} className="h-4" />
+            <Progress 
+              value={activeTab === "tower" ? overallCompletion : infraOverallCompletion} 
+              className="h-4" 
+            />
+            <p className="text-xs text-slate-500 mt-2">
+              * Weightages auto-recalibrate when activities are marked as N/A
+            </p>
           </CardContent>
         </Card>
 
-        {/* Activities Table */}
-        {selectedBuilding && (
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+        ) : template && activeTab === "tower" && selectedBuilding ? (
+          /* Tower Construction Activities */
+          <div className="space-y-4">
+            {template.tower_construction.categories.map((category, catIdx) => {
+              const catCompletion = categoryCompletions[category.id] || 0;
+              const isExpanded = expandedCategories[category.id] !== false;
+              
+              return (
+                <Card key={category.id} className="overflow-hidden">
+                  <div 
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                    onClick={() => toggleCategory(category.id)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                        <span className="text-sm font-medium text-slate-500">{String.fromCharCode(97 + catIdx)})</span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-900">{category.name}</h3>
+                        <p className="text-sm text-slate-500">Base Weightage: {category.total_weightage}%</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-32">
+                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${getCompletionColor(catCompletion)} transition-all`}
+                            style={{ width: `${catCompletion}%` }}
+                          />
+                        </div>
+                      </div>
+                      <Badge variant={catCompletion >= 100 ? "success" : "secondary"} className="w-16 justify-center">
+                        {formatNumber(catCompletion, 1)}%
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  {isExpanded && (
+                    <CardContent className="pt-0 pb-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="w-8">N/A</TableHead>
+                            <TableHead>Activity</TableHead>
+                            <TableHead className="text-center w-20">Wt. %</TableHead>
+                            <TableHead className="text-center w-32">Completion %</TableHead>
+                            <TableHead className="text-center w-24">Weighted</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {category.activities.map((activity, actIdx) => {
+                            const actData = towerActivities[category.id]?.[activity.id] || { completion: 0, is_applicable: true };
+                            const isNA = !actData.is_applicable;
+                            
+                            return (
+                              <TableRow key={activity.id} className={isNA ? "bg-slate-100 opacity-60" : ""}>
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    checked={isNA}
+                                    onChange={(e) => handleActivityChange(category.id, activity.id, 'is_applicable', !e.target.checked)}
+                                    className="h-4 w-4 rounded border-slate-300"
+                                    title="Mark as Not Applicable"
+                                  />
+                                </TableCell>
+                                <TableCell className={`text-sm ${isNA ? "line-through text-slate-400" : ""}`}>
+                                  <span className="text-slate-500 mr-2">{actIdx + 1}.</span>
+                                  {activity.name}
+                                </TableCell>
+                                <TableCell className="text-center text-sm">{activity.weightage}%</TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    value={actData.completion || 0}
+                                    onChange={(e) => handleActivityChange(category.id, activity.id, 'completion', e.target.value)}
+                                    disabled={isNA}
+                                    className="w-20 mx-auto text-center text-sm h-8"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-center font-medium text-sm">
+                                  {isNA ? "-" : formatNumber(activity.weightage * (actData.completion || 0) / 100, 2) + "%"}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        ) : template && activeTab === "infrastructure" ? (
+          /* Infrastructure Works */
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Activity-wise Progress</CardTitle>
+              <CardTitle className="text-lg">Project Infrastructure Works</CardTitle>
+              <p className="text-sm text-slate-500">Total weightage: 100% (recalibrates when items marked N/A)</p>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Activity</TableHead>
-                      <TableHead className="text-center w-24">Weightage</TableHead>
-                      <TableHead className="text-center w-40">Completion %</TableHead>
-                      <TableHead className="text-center w-32">Weighted</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activities.map((activity, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{activity.activity_name}</TableCell>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="w-8">N/A</TableHead>
+                    <TableHead>Infrastructure Item</TableHead>
+                    <TableHead className="text-center w-20">Wt. %</TableHead>
+                    <TableHead className="text-center w-32">Completion %</TableHead>
+                    <TableHead className="text-center w-24">Weighted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {template.infrastructure_works.activities.map((activity, idx) => {
+                    const actData = infraActivities[activity.id] || { completion: 0, is_applicable: true };
+                    const isNA = !actData.is_applicable;
+                    
+                    return (
+                      <TableRow key={activity.id} className={isNA ? "bg-slate-100 opacity-60" : ""}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={isNA}
+                            onChange={(e) => handleInfraChange(activity.id, 'is_applicable', !e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-300"
+                            title="Mark as Not Applicable"
+                          />
+                        </TableCell>
+                        <TableCell className={`font-medium ${isNA ? "line-through text-slate-400" : ""}`}>
+                          <span className="text-slate-500 mr-2">{idx + 1}.</span>
+                          {activity.name}
+                        </TableCell>
                         <TableCell className="text-center">{activity.weightage}%</TableCell>
                         <TableCell>
                           <Input
                             type="number"
                             min="0"
                             max="100"
-                            value={activity.completion_percentage}
-                            onChange={(e) => handleActivityChange(idx, e.target.value)}
-                            className="w-24 mx-auto text-center"
+                            step="1"
+                            value={actData.completion || 0}
+                            onChange={(e) => handleInfraChange(activity.id, 'completion', e.target.value)}
+                            disabled={isNA}
+                            className="w-20 mx-auto text-center h-8"
                           />
                         </TableCell>
                         <TableCell className="text-center font-medium">
-                          {formatNumber(activity.weightage * activity.completion_percentage / 100, 2)}%
+                          {isNA ? "-" : formatNumber(activity.weightage * (actData.completion || 0) / 100, 2) + "%"}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </CardContent>
+          </Card>
+        ) : (
+          <Card className="text-center py-12">
+            <Building className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-600">Select a project and building to track progress</p>
           </Card>
         )}
 
         {/* Save Button */}
-        {selectedBuilding && (
-          <div className="flex justify-end">
+        {selectedBuilding && template && (
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => initializeActivities(template)}>
+              Reset to Defaults
+            </Button>
             <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save Progress
