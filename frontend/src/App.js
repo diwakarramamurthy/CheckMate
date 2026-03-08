@@ -4711,31 +4711,15 @@ const ImportPage = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-3 items-center">
-                <a 
-                  href={`${API}/import/sales-template`}
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 cursor-pointer"
-                  data-testid="download-template-btn"
-                  onContextMenu={(e) => {
-                    // Allow right-click to work normally
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    toast.info("Right-click the button and select 'Save Link As...' to download");
-                  }}
-                >
+            <div className="flex gap-3 items-center">
+                <Button variant="outline" onClick={downloadTemplate} data-testid="download-template-btn">
                   <Download className="h-4 w-4 mr-2" />
-                  Download Template (Right-click → Save Link As)
-                </a>
+                  Download Template
+                </Button>
                 <Button onClick={handleUpload} disabled={uploading || !file} className="bg-blue-600 hover:bg-blue-700" data-testid="upload-btn">
                   {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
                   Import Data
                 </Button>
-              </div>
-              <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                <strong>How to download:</strong> Right-click the "Download Template" button above and select "Save Link As..." to save the file.
-              </p>
             </div>
           </CardContent>
         </Card>
