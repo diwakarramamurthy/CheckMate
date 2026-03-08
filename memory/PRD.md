@@ -1,7 +1,7 @@
-# RERA Compliance Manager - Product Requirements Document
+# CheckMate - RERA Manager - Product Requirements Document
 
 ## Project Overview
-**Application Name:** RERA Compliance Manager  
+**Application Name:** CheckMate - RERA Manager  
 **Purpose:** Automate RERA compliance reporting for real estate developers in India  
 **Initial State:** Goa RERA  
 **Created:** January 2026
@@ -84,79 +84,61 @@
 - [x] Auto-calculation of total floors and units based on building type
 - [x] Bulk Add feature - create multiple buildings with same configuration
 - [x] Enhanced table display with Type, Parking (B/S/U), Floors columns
+- [x] **NEW**: On Site Expenditure tab for ESTIMATED costs (March 2026)
 
 ### Construction Progress (FORM-1 - Comprehensive Update March 2026)
 - [x] 16 default construction activities with weightages (legacy)
 - [x] Per-building activity completion tracking
 - [x] Quarterly progress entry
 - [x] Overall weighted completion calculation
-- [x] **NEW**: Comprehensive 12-category, 48-activity tracking system:
-  - a) Completion of Plinth (10.89%) - 11 activities
-  - b) Completion of Slabs at all levels (31.78%) - 7 activities
-  - c) Brickwork and Plastering (12.71%) - 7 activities
-  - d) Plumbing (3.93%) - 3 activities
-  - e) Electrical Works (9.08%) - 5 activities
-  - f) Aluminium/UPVC Windows (8.02%) - 2 activities
-  - g) Tiling/Flooring (8.02%) - 3 activities
-  - h) Door Shutter Fixing (2.42%) - 2 activities
-  - i) Water Proofing (2.42%) - 1 activity
-  - j) Painting (8.32%) - 4 activities
-  - k) Carpark (0.76%) - 2 activities
-  - l) Intimation of Handover (1.66%) - 1 activity
+- [x] **NEW**: Comprehensive 12-category, 48-activity tracking system
 - [x] **NEW**: N/A (Not Applicable) checkbox for each activity
 - [x] **NEW**: Automatic weightage recalibration when activities marked N/A
 - [x] **NEW**: Category-wise completion percentage display
 - [x] **NEW**: Expandable/collapsible category sections
 - [x] **NEW**: Infrastructure Works tab (9 items, 100% total)
-
-### Project Infrastructure Works (FORM-1 Table B - NEW)
-- [x] **NEW**: Road, Foot-path and storm water drain (25%)
-- [x] **NEW**: Underground sewage drainage network (15%)
-- [x] **NEW**: Sewage Treatment Plant (10%)
-- [x] **NEW**: Over-head and Sump water reservoir/Tank (10%)
-- [x] **NEW**: Underground water distribution network (12.5%)
-- [x] **NEW**: Electric Substation & Underground cables (12.5%)
-- [x] **NEW**: Street Lights (5%)
-- [x] **NEW**: Entry Gate (3%)
-- [x] **NEW**: Boundary Wall (7%)
-- [x] **NEW**: N/A support with auto-recalibration
+- [x] **NEW**: Actual Site Expenditure tab for quarterly ACTUAL costs (March 2026)
 
 ### Project Costs (FORM-3 & FORM-4 - Enhanced)
 - [x] Land costs (acquisition, TDR, stamp duty, etc.)
 - [x] Development costs (construction, infrastructure, etc.)
 - [x] Estimated vs actual cost tracking
 - [x] Balance cost calculation
-- [x] **NEW**: Detailed land cost breakdown (legal cost, interest, development rights, government charges)
-- [x] **NEW**: Rehabilitation scheme costs (transit accommodation, clearance, ASR premium)
-- [x] **NEW**: On-site expenditure breakdown (salaries, consultants, site overheads, services, machinery)
+- [x] **NEW**: Detailed land cost breakdown
+- [x] **NEW**: Rehabilitation scheme costs
+- [x] **NEW**: On-site expenditure - READ-ONLY display (March 2026)
+  - Estimated costs pulled from Buildings & Infrastructure page
+  - Actual costs pulled from Construction Progress page (auto-populated)
 - [x] **NEW**: Off-site expenditure tracking
-- [x] **NEW**: Extra/Additional items (Annexure A) with details
+- [x] **NEW**: Extra/Additional items (Annexure A)
 - [x] **NEW**: Cost completion percentage calculation
 
 ### Financial Summary (FORM-5 - NEW)
-- [x] **NEW**: Designated account balance tracking
-- [x] **NEW**: Amount deposited and withdrawn per quarter
-- [x] **NEW**: Total withdrawals till date
-- [x] **NEW**: Receivables from sold apartments
-- [x] **NEW**: Unsold area (sq.m) and ASR rate
-- [x] **NEW**: Unsold inventory value calculation
-- [x] **NEW**: Deposit percentage (70% or 100%) logic
-- [x] **NEW**: Amount to deposit calculation
+- [x] Designated account balance tracking
+- [x] Amount deposited and withdrawn per quarter
+- [x] Total withdrawals till date
+- [x] Receivables from sold apartments
+- [x] Unsold area and ASR rate
+- [x] Unsold inventory value calculation
+- [x] Deposit percentage logic
+- [x] Amount to deposit calculation
 
 ### Sales & Receivables (Annexure-A)
 - [x] Unit-wise sales entry
 - [x] Buyer details, agreement date, carpet area
 - [x] Sale value, amount received, balance receivable
 - [x] Excel import functionality
+- [x] **NEW**: Sales data replacement on import
+- [x] **NEW**: Unsold inventory tracking
 
 ### Report Generation
-- [x] Form-1: Architect Certificate (% Completion)
+- [x] Form-1: Architect Certificate (% Completion) - PDF Ready
 - [x] Form-2: Architect Completion Certificate
-- [x] Form-3: Engineer Certificate (Cost Incurred)
-- [x] Form-4: CA Certificate (Project Cost)
+- [x] Form-3: Engineer Certificate (Cost Incurred) - PDF Ready
+- [x] Form-4: CA Certificate (Project Cost) - PDF Ready
 - [x] Form-5: CA Compliance Certificate
 - [x] Form-6: Auditor Certificate
-- [x] Annexure-A: Statement of Receivables
+- [x] Annexure-A: Statement of Receivables - PDF Ready
 
 ### Dashboard
 - [x] Project completion percentage
@@ -165,91 +147,42 @@
 - [x] RERA deposit calculation
 - [x] Quick action buttons
 
-## What's Been Implemented (January 2026 - March 2026)
+## Completed This Session (March 2026)
 
-### Backend (FastAPI + MongoDB)
-- ✅ Complete REST API for all modules
-- ✅ JWT authentication with bcrypt password hashing
-- ✅ Project CRUD endpoints with 40+ fields for RERA compliance
-- ✅ Building CRUD endpoints with enhanced fields (building type, parking config, floor config)
-- ✅ Bulk building creation endpoint (POST /api/buildings/bulk)
-- ✅ Building types configuration endpoint (GET /api/buildings/types)
-- ✅ Construction progress endpoints with weighted calculation
-- ✅ **NEW**: FORM-1 Table A template endpoint (/api/construction-progress/form1-table-a-template)
-- ✅ **NEW**: Common Development Works CRUD (/api/common-development-works)
-- ✅ Project cost endpoints with detailed Form-4 structure
-- ✅ Building cost endpoints with Form-3 structure
-- ✅ **NEW**: Financial Summary CRUD (/api/financial-summary) for Form-5
-- ✅ Unit sales CRUD and bulk import
-- ✅ Excel import endpoint with column mapping
-- ✅ Excel template download
-- ✅ Dashboard aggregation endpoint
-- ✅ Report generation endpoint
-- ✅ Data validation endpoint
-- ✅ Report template storage (7 Goa RERA templates)
+### On Site Expenditure Relocation Feature ✅
+1. ✅ Estimated costs entry moved to Buildings & Infrastructure page ("On Site Expenditure" tab)
+2. ✅ Actual costs entry added to Construction Progress page ("Actual Site Expenditure" tab)
+3. ✅ Project Costs page "On Site Expenditure" section now READ-ONLY
+   - Displays "Auto-populated" badge
+   - Shows "Data entered in Construction Progress page" message
+   - Pulls estimated costs from Buildings page
+   - Pulls actual costs from Construction Progress page
+4. ✅ New backend endpoint: GET/POST /api/actual-site-expenditure (per quarter/year)
+5. ✅ All tests passed (Backend 100%, Frontend 100%)
 
-### Frontend (React)
-- ✅ Login/Register with role selection
-- ✅ Responsive sidebar navigation
-- ✅ Dashboard with metrics cards
-- ✅ Projects list and form pages
-- ✅ **Enhanced Project Form** (March 2026) with 6 tabbed sections:
-  - Basic Info (Name, State, Phase, Promoter, Plot Area, Dates, Planning Authority)
-  - Location & Boundaries (Address, PTS/Chalta, Survey, Ward, Village, Boundaries)
-  - RERA & Bank (Registration Number, Dates, Designated Account)
-  - Architect & Engineer (Full contact details)
-  - Consultants (Structural, MEP, Site Supervisor, Quantity Surveyor)
-  - CA & Auditor (Full contact and membership details)
-- ✅ **Enhanced Buildings management page** (March 2026)
-  - Building type selector (Residential Tower, Mixed Tower, Row House, Bungalow)
-  - Parking configuration (Basement, Stilt/Ground, Upper Level)
-  - Floor configuration (Commercial, Residential, Apartments per floor)
-  - Bulk Add dialog for multiple buildings
-  - Enhanced table with Type, Parking, Floors columns
-- ✅ Construction progress tracking page
-- ✅ Project costs management page
-- ✅ Sales & receivables page with table
-- ✅ Reports generation page with preview
-- ✅ Excel import page
-- ✅ Blue theme with Manrope/Inter fonts
-
-### Database Collections
-- users
-- projects
-- buildings
-- construction_progress
-- project_costs
-- building_costs
-- unit_sales
-- quarterly_reports
-- report_templates
+### Previous Completions
+- ✅ PDF generation for Form-1, Form-3, Form-4, Annexure-A
+- ✅ Sales data import with replacement logic
+- ✅ Indian number formatting (lakhs/crores)
+- ✅ App rebranding to "CheckMate - RERA Manager"
 
 ## Prioritized Backlog
 
-### P0 - Critical (Next Sprint)
-- [x] PDF export using reportlab library ✅ COMPLETED March 2026
-- [ ] Form signature fields for digital signatures
-- [ ] Quarterly data copy from previous quarter
-
 ### P1 - High Priority
 - [ ] Implement PDF generation for Form-2, Form-5, Form-6
-- [ ] Refactor `backend/server.py` into separate route files
-- [ ] Admin template editor with HTML preview
-- [ ] Email notifications for report deadlines
-- [ ] Bulk building import from Excel
-- [ ] Data export to Excel
+- [ ] Develop Quarterly Reporting feature
+- [ ] Refactor `backend/server.py` into separate route files (>3000 lines)
 
 ### P2 - Medium Priority
+- [ ] Build data validation module
+- [ ] Create admin-only "Template Editor"
+- [ ] Implement "Reports Archive"
 - [ ] Multi-state support (Maharashtra, Karnataka)
-- [ ] Report archive with history
-- [ ] Audit trail for all changes
-- [ ] User management admin page
 
 ### P3 - Nice to Have
 - [ ] Charts on dashboard (completion trend, cost analysis)
-- [ ] Mobile app (React Native)
-- [ ] WhatsApp/SMS notifications
-- [ ] Integration with RERA portal APIs
+- [ ] Digital signature fields
+- [ ] Email notifications for report deadlines
 
 ## Technology Stack
 - **Frontend:** React 18, TailwindCSS, Shadcn/UI
@@ -258,17 +191,32 @@
 - **Auth:** JWT with bcrypt
 - **Excel:** openpyxl
 - **PDF:** reportlab
+- **File Downloads:** file-saver
 
-## Completed This Session (March 2026)
-1. ✅ Implemented PDF generation for Form-1, Form-3, Form-4, Annexure-A using reportlab
-2. ✅ Created `/api/generate-pdf/{project_id}/{report_type}` endpoint
-3. ✅ Updated Reports page with Preview and Download PDF buttons
-4. ✅ Added "PDF Ready" badges for supported report types
-5. ✅ Verified data persistence across page reloads
+## Database Collections
+- users
+- projects
+- buildings
+- construction_progress
+- infrastructure_progress
+- project_costs
+- building_costs
+- unit_sales
+- site_expenditure (estimated)
+- actual_site_expenditure (per quarter)
+- quarterly_reports
+- report_templates
 
-## Next Tasks
-1. Implement PDF generation for remaining forms (Form-2, Form-5, Form-6)
-2. Add form signature capture component
-3. Build quarterly data copy feature
-4. Refactor backend routes into separate files
+## Key API Endpoints
+- **Auth:** /api/auth/login, /api/auth/register, /api/auth/me
+- **Projects:** /api/projects (CRUD)
+- **Buildings:** /api/buildings, /api/buildings/bulk
+- **Construction Progress:** /api/construction-progress, /api/construction-progress/detailed
+- **Infrastructure:** /api/infrastructure-progress, /api/infrastructure-costs
+- **Site Expenditure (Estimated):** /api/site-expenditure/{project_id}
+- **Site Expenditure (Actual):** /api/actual-site-expenditure/{project_id}?quarter=Q1&year=2026
+- **Project Costs:** /api/project-costs, /api/estimated-development-cost
+- **Sales:** /api/unit-sales, /api/import/sales
+- **Reports:** /api/projects/{project_id}/report/download/{form_name}
+- **Dashboard:** /api/dashboard/{project_id}
 
