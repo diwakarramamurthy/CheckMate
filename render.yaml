@@ -1,0 +1,28 @@
+services:
+  # Backend API - FastAPI
+  - type: web
+    name: checkmate-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGO_URL
+        sync: false   # set manually in Render dashboard
+      - key: DB_NAME
+        value: checkmate_rera
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false   # set to your frontend Render URL after deploy
+
+  # Frontend - React Static Site
+  - type: web
+    name: checkmate-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: yarn install && yarn build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        sync: false   # set to your backend Render URL after deploy
