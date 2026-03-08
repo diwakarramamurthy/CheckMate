@@ -149,6 +149,26 @@
 
 ## Completed This Session (March 2026)
 
+### Land Cost Page Feature ✅ (Latest)
+1. ✅ New "Land Cost" page created at /land-cost route
+2. ✅ Navigation updated - Land Cost menu item between Projects and Buildings & Infra
+3. ✅ Page has 10 cost fields (a-j) for both Estimated and Actual:
+   - a) Land Cost (acquiring land or land rights)
+   - b) Premium Cost (FSI, Fungible area to Statutory Authority)
+   - c) TDR Cost
+   - d) Statutory Cost (Stamp duty, registration fees, etc.)
+   - e) Land Premium (ASR for redevelopment of Govt. land)
+   - f) Under Rehab Scheme
+   - g) Estimated Cost for Rehab (certified by Engineer)
+   - h) Actual Cost of Rehab (certified by CA)
+   - i) Cost towards Land Clearance
+   - j) Cost of ASR Linked Premium
+4. ✅ New backend endpoint: GET/POST /api/land-cost/{project_id}
+5. ✅ Project Costs page updated - Land Cost sections now READ-ONLY
+   - Shows "Auto-populated from Land Cost page" badge
+   - Both Estimated and Actual sections pull from Land Cost page
+6. ✅ All tests passed (Backend 100%, Frontend 100%)
+
 ### On Site Expenditure Relocation Feature ✅
 1. ✅ Estimated costs entry moved to Buildings & Infrastructure page ("On Site Expenditure" tab)
 2. ✅ Actual costs entry added to Construction Progress page ("Actual Site Expenditure" tab)
@@ -171,7 +191,7 @@
 ### P1 - High Priority
 - [ ] Implement PDF generation for Form-2, Form-5, Form-6
 - [ ] Develop Quarterly Reporting feature
-- [ ] Refactor `backend/server.py` into separate route files (>3000 lines)
+- [ ] Refactor `backend/server.py` into separate route files (>3400 lines)
 
 ### P2 - Medium Priority
 - [ ] Build data validation module
@@ -204,12 +224,14 @@
 - unit_sales
 - site_expenditure (estimated)
 - actual_site_expenditure (per quarter)
+- land_costs (estimated + actual)
 - quarterly_reports
 - report_templates
 
 ## Key API Endpoints
 - **Auth:** /api/auth/login, /api/auth/register, /api/auth/me
 - **Projects:** /api/projects (CRUD)
+- **Land Cost:** /api/land-cost/{project_id}
 - **Buildings:** /api/buildings, /api/buildings/bulk
 - **Construction Progress:** /api/construction-progress, /api/construction-progress/detailed
 - **Infrastructure:** /api/infrastructure-progress, /api/infrastructure-costs
