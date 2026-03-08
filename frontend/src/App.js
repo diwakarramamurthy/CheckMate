@@ -8,7 +8,7 @@ import {
   Building2, LayoutDashboard, FolderKanban, FileText, Upload, Settings, 
   LogOut, Menu, X, ChevronRight, Plus, Pencil, Trash2, Download,
   AlertCircle, CheckCircle2, TrendingUp, Users, IndianRupee, Building,
-  FileSpreadsheet, ClipboardList, ChevronDown, Eye, Loader2, RefreshCw
+  FileSpreadsheet, ClipboardList, ChevronDown, Eye, Loader2, RefreshCw, MapPin
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -192,6 +192,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: FolderKanban, label: "Projects", path: "/projects" },
+    { icon: MapPin, label: "Land Cost", path: "/land-cost" },
     { icon: Building, label: "Buildings & Infra", path: "/buildings" },
     { icon: TrendingUp, label: "Construction Progress", path: "/construction" },
     { icon: IndianRupee, label: "Project Costs", path: "/costs" },
@@ -1365,6 +1366,250 @@ const ProjectFormPage = () => {
   );
 };
 
+// Land Cost Page
+const LandCostPage = () => {
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Estimated land cost state
+  const [estimated, setEstimated] = useState({
+    land_cost: 0,
+    premium_cost: 0,
+    tdr_cost: 0,
+    statutory_cost: 0,
+    land_premium: 0,
+    under_rehab_scheme: 0,
+    estimated_rehab_cost: 0,
+    actual_rehab_cost: 0,
+    land_clearance_cost: 0,
+    asr_linked_premium: 0
+  });
+  
+  // Actual land cost state
+  const [actual, setActual] = useState({
+    land_cost: 0,
+    premium_cost: 0,
+    tdr_cost: 0,
+    statutory_cost: 0,
+    land_premium: 0,
+    under_rehab_scheme: 0,
+    estimated_rehab_cost: 0,
+    actual_rehab_cost: 0,
+    land_clearance_cost: 0,
+    asr_linked_premium: 0
+  });
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  useEffect(() => {
+    if (selectedProject) {
+      fetchLandCost();
+    }
+  }, [selectedProject]);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await axios.get(`${API}/projects`);
+      setProjects(res.data);
+      if (res.data.length > 0) setSelectedProject(res.data[0].project_id);
+    } catch (err) {
+      toast.error("Failed to fetch projects");
+    }
+  };
+
+  const fetchLandCost = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API}/land-cost/${selectedProject}`);
+      setEstimated(res.data.estimated || {
+        land_cost: 0, premium_cost: 0, tdr_cost: 0, statutory_cost: 0,
+        land_premium: 0, under_rehab_scheme: 0, estimated_rehab_cost: 0,
+        actual_rehab_cost: 0, land_clearance_cost: 0, asr_linked_premium: 0
+      });
+      setActual(res.data.actual || {
+        land_cost: 0, premium_cost: 0, tdr_cost: 0, statutory_cost: 0,
+        land_premium: 0, under_rehab_scheme: 0, estimated_rehab_cost: 0,
+        actual_rehab_cost: 0, land_clearance_cost: 0, asr_linked_premium: 0
+      });
+    } catch (err) {
+      console.error("Failed to fetch land cost", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEstimatedChange = (field, value) => {
+    setEstimated(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+  };
+
+  const handleActualChange = (field, value) => {
+    setActual(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+  };
+
+  const calculateTotal = (costs) => {
+    return Object.values(costs).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+  };
+
+  const saveLandCost = async () => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/land-cost/${selectedProject}`, {
+        estimated,
+        actual
+      });
+      toast.success("Land cost saved successfully");
+    } catch (err) {
+      toast.error("Failed to save land cost");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const costFields = [
+    { key: "land_cost", label: "a) Land Cost", description: "Amount paid for acquiring land or land rights" },
+    { key: "premium_cost", label: "b) Premium Cost", description: "Amount of Premium payable for FSI, Fungible area to Statutory Authority" },
+    { key: "tdr_cost", label: "c) TDR Cost", description: "Transfer of Development Rights cost" },
+    { key: "statutory_cost", label: "d) Statutory Cost", description: "Amount paid - Stamp duty, transfer charges, registration fee etc." },
+    { key: "land_premium", label: "e) Land Premium", description: "Amount payable as annual statement of rates (ASR) for redevelopment of Govt. land" },
+    { key: "under_rehab_scheme", label: "f) Under Rehab Scheme", description: "Amount under rehabilitation scheme" },
+    { key: "estimated_rehab_cost", label: "g) Estimated Cost for Rehab", description: "As certified by Engineer" },
+    { key: "actual_rehab_cost", label: "h) Actual Cost of Rehab", description: "As certified by CA" },
+    { key: "land_clearance_cost", label: "i) Cost towards Land Clearance", description: "For clearing encumbrances, legal/illegal occupants, Transit accommodation, Overhead cost etc." },
+    { key: "asr_linked_premium", label: "j) Cost of ASR Linked Premium", description: "For ASR linked premium, fees, charges, security deposit for Rehabilitation projects" }
+  ];
+
+  const estimatedTotal = calculateTotal(estimated);
+  const actualTotal = calculateTotal(actual);
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 font-heading">Land Cost</h1>
+            <p className="text-slate-600 mt-1">Manage estimated and actual land costs for your project</p>
+          </div>
+        </div>
+
+        {/* Project Selection */}
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-4">
+              <Label className="form-label whitespace-nowrap">Select Project:</Label>
+              <Select value={selectedProject} onValueChange={setSelectedProject}>
+                <SelectTrigger className="w-80" data-testid="land-cost-project-select">
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.project_id} value={p.project_id}>
+                      {p.project_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {loading ? (
+          <Card className="py-12 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+            <p className="text-slate-600 mt-2">Loading land cost data...</p>
+          </Card>
+        ) : selectedProject ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Estimated Land Cost */}
+            <Card className="border-2 border-blue-200">
+              <CardHeader className="bg-blue-50">
+                <CardTitle className="text-lg text-blue-800">Estimated Land Cost</CardTitle>
+                <CardDescription>Projected land acquisition costs</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                {costFields.map((field) => (
+                  <div key={`est-${field.key}`}>
+                    <Label className="form-label text-sm">{field.label}</Label>
+                    <p className="text-xs text-slate-500 mb-1">{field.description}</p>
+                    <CurrencyInput
+                      value={estimated[field.key]}
+                      onChange={(val) => handleEstimatedChange(field.key, val)}
+                      data-testid={`estimated-${field.key}`}
+                    />
+                  </div>
+                ))}
+                
+                <Separator className="my-4" />
+                
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-blue-700">Total Estimated Land Cost</span>
+                    <span className="text-xl font-bold text-blue-800">{formatCurrency(estimatedTotal)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Actual Land Cost */}
+            <Card className="border-2 border-emerald-200">
+              <CardHeader className="bg-emerald-50">
+                <CardTitle className="text-lg text-emerald-800">Actual Land Cost</CardTitle>
+                <CardDescription>Actual costs incurred till date</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4">
+                {costFields.map((field) => (
+                  <div key={`act-${field.key}`}>
+                    <Label className="form-label text-sm">{field.label}</Label>
+                    <p className="text-xs text-slate-500 mb-1">{field.description}</p>
+                    <CurrencyInput
+                      value={actual[field.key]}
+                      onChange={(val) => handleActualChange(field.key, val)}
+                      data-testid={`actual-${field.key}`}
+                    />
+                  </div>
+                ))}
+                
+                <Separator className="my-4" />
+                
+                <div className="bg-emerald-50 p-4 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-emerald-700">Total Actual Land Cost</span>
+                    <span className="text-xl font-bold text-emerald-800">{formatCurrency(actualTotal)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <Card className="text-center py-12">
+            <FolderKanban className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-600">Select a project to manage land costs</p>
+          </Card>
+        )}
+
+        {/* Save Button */}
+        {selectedProject && !loading && (
+          <div className="flex justify-end">
+            <Button 
+              onClick={saveLandCost} 
+              className="bg-blue-600 hover:bg-blue-700" 
+              disabled={saving}
+              data-testid="save-land-cost-btn"
+            >
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Land Cost
+            </Button>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+};
+
 // Buildings Page - Enhanced with building types, floor configurations, and bulk creation
 const BuildingsPage = () => {
   const [projects, setProjects] = useState([]);
@@ -2208,6 +2453,7 @@ function App() {
           <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
           <Route path="/projects/new" element={<ProtectedRoute><ProjectFormPage /></ProtectedRoute>} />
           <Route path="/projects/:id/edit" element={<ProtectedRoute><ProjectFormPage /></ProtectedRoute>} />
+          <Route path="/land-cost" element={<ProtectedRoute><LandCostPage /></ProtectedRoute>} />
           <Route path="/buildings" element={<ProtectedRoute><BuildingsPage /></ProtectedRoute>} />
           <Route path="/construction" element={<ProtectedRoute><ConstructionProgressPage /></ProtectedRoute>} />
           <Route path="/costs" element={<ProtectedRoute><ProjectCostsPage /></ProtectedRoute>} />
@@ -2944,6 +3190,12 @@ const ProjectCostsPage = () => {
     machinery_cost: 0,
     total: 0
   });
+  
+  // Land Cost (from Land Cost page)
+  const [landCost, setLandCost] = useState({
+    estimated: { total: 0 },
+    actual: { total: 0 }
+  });
 
   useEffect(() => {
     fetchProjects();
@@ -2955,6 +3207,7 @@ const ProjectCostsPage = () => {
       fetchEstimatedDevCost();
       fetchActualCostsFromProgress();
       fetchActualSiteExpenditure();
+      fetchLandCost();
     }
   }, [selectedProject, quarter, year]);
 
@@ -2962,6 +3215,15 @@ const ProjectCostsPage = () => {
     const res = await axios.get(`${API}/projects`);
     setProjects(res.data);
     if (res.data.length > 0) setSelectedProject(res.data[0].project_id);
+  };
+  
+  const fetchLandCost = async () => {
+    try {
+      const res = await axios.get(`${API}/land-cost/${selectedProject}`);
+      setLandCost(res.data);
+    } catch (err) {
+      console.error("Failed to fetch land cost", err);
+    }
   };
   
   const fetchActualSiteExpenditure = async () => {
@@ -3146,16 +3408,17 @@ const ProjectCostsPage = () => {
     });
   };
 
-  const totalLandCost = cost.land_acquisition_cost + cost.development_rights_premium + 
-    cost.tdr_cost + cost.stamp_duty + cost.government_charges + cost.encumbrance_removal;
+  // Land cost totals from Land Cost page
+  const estimatedLandTotal = landCost.estimated?.total || 0;
+  const actualLandTotal = landCost.actual?.total || 0;
   
   // Use actual costs from progress for construction and infrastructure, and actual site expenditure
   const totalDevCost = actualCosts.construction_cost + actualCosts.infrastructure_cost + 
     (actualSiteExpenditure.total || 0) + 
     cost.taxes_statutory + cost.finance_cost;
   
-  const totalEstimated = cost.estimated_land_cost + estimatedDevCost.total;
-  const totalIncurred = totalLandCost + totalDevCost;
+  const totalEstimated = estimatedLandTotal + estimatedDevCost.total;
+  const totalIncurred = actualLandTotal + totalDevCost;
   const balanceCost = totalEstimated - totalIncurred;
 
   const handleSave = async () => {
@@ -3253,9 +3516,79 @@ const ProjectCostsPage = () => {
         {/* Cost Forms - Two Column Layout: Estimated vs Actual */}
         <div className="grid lg:grid-cols-2 gap-6">
           
-          {/* LEFT COLUMN: ESTIMATED DEVELOPMENT COST */}
-          <Card className="border-2 border-blue-200">
-            <CardHeader className="bg-blue-50">
+          {/* LEFT COLUMN: ESTIMATED COSTS */}
+          <div className="space-y-6">
+            {/* ESTIMATED LAND COST - Read Only */}
+            <Card className="border-2 border-amber-200">
+              <CardHeader className="bg-amber-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg text-amber-800">Estimated Land Cost</CardTitle>
+                    <CardDescription>
+                      <Badge variant="secondary" className="text-xs">Auto-populated from Land Cost page</Badge>
+                    </CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={fetchLandCost}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="form-label text-xs">a) Land Cost</Label>
+                    <CurrencyInput value={landCost.estimated?.land_cost || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">b) Premium Cost (FSI)</Label>
+                    <CurrencyInput value={landCost.estimated?.premium_cost || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">c) TDR Cost</Label>
+                    <CurrencyInput value={landCost.estimated?.tdr_cost || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">d) Statutory Cost</Label>
+                    <CurrencyInput value={landCost.estimated?.statutory_cost || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">e) Land Premium (ASR)</Label>
+                    <CurrencyInput value={landCost.estimated?.land_premium || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">f) Under Rehab Scheme</Label>
+                    <CurrencyInput value={landCost.estimated?.under_rehab_scheme || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">g) Est. Rehab Cost (Engineer)</Label>
+                    <CurrencyInput value={landCost.estimated?.estimated_rehab_cost || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">h) Actual Rehab Cost (CA)</Label>
+                    <CurrencyInput value={landCost.estimated?.actual_rehab_cost || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">i) Land Clearance Cost</Label>
+                    <CurrencyInput value={landCost.estimated?.land_clearance_cost || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">j) ASR Linked Premium</Label>
+                    <CurrencyInput value={landCost.estimated?.asr_linked_premium || 0} onChange={() => {}} disabled className="bg-amber-50/50" />
+                  </div>
+                </div>
+                <div className="bg-amber-100 p-3 rounded-lg mt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-amber-700">Total Estimated Land Cost</span>
+                    <span className="text-xl font-bold text-amber-800">{formatCurrency(estimatedLandTotal)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ESTIMATED DEVELOPMENT COST */}
+            <Card className="border-2 border-blue-200">
+              <CardHeader className="bg-blue-50">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg text-blue-800">Estimated Development Cost</CardTitle>
@@ -3404,21 +3737,92 @@ const ProjectCostsPage = () => {
               </div>
             </CardContent>
           </Card>
+          </div>
 
-          {/* RIGHT COLUMN: ACTUAL DEVELOPMENT COST */}
-          <Card className="border-2 border-emerald-200">
-            <CardHeader className="bg-emerald-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg text-emerald-800">Actual Development Cost</CardTitle>
-                  <CardDescription>Cost incurred till date</CardDescription>
+          {/* RIGHT COLUMN: ACTUAL COSTS */}
+          <div className="space-y-6">
+            {/* ACTUAL LAND COST - Read Only */}
+            <Card className="border-2 border-orange-200">
+              <CardHeader className="bg-orange-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg text-orange-800">Actual Land Cost</CardTitle>
+                    <CardDescription>
+                      <Badge variant="secondary" className="text-xs">Auto-populated from Land Cost page</Badge>
+                    </CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={fetchLandCost}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => { fetchActualCostsFromProgress(); fetchActualSiteExpenditure(); }}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
-            </CardHeader>
+              </CardHeader>
+              <CardContent className="p-6 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="form-label text-xs">a) Land Cost</Label>
+                    <CurrencyInput value={landCost.actual?.land_cost || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">b) Premium Cost (FSI)</Label>
+                    <CurrencyInput value={landCost.actual?.premium_cost || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">c) TDR Cost</Label>
+                    <CurrencyInput value={landCost.actual?.tdr_cost || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">d) Statutory Cost</Label>
+                    <CurrencyInput value={landCost.actual?.statutory_cost || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">e) Land Premium (ASR)</Label>
+                    <CurrencyInput value={landCost.actual?.land_premium || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">f) Under Rehab Scheme</Label>
+                    <CurrencyInput value={landCost.actual?.under_rehab_scheme || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">g) Est. Rehab Cost (Engineer)</Label>
+                    <CurrencyInput value={landCost.actual?.estimated_rehab_cost || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">h) Actual Rehab Cost (CA)</Label>
+                    <CurrencyInput value={landCost.actual?.actual_rehab_cost || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">i) Land Clearance Cost</Label>
+                    <CurrencyInput value={landCost.actual?.land_clearance_cost || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">j) ASR Linked Premium</Label>
+                    <CurrencyInput value={landCost.actual?.asr_linked_premium || 0} onChange={() => {}} disabled className="bg-orange-50/50" />
+                  </div>
+                </div>
+                <div className="bg-orange-100 p-3 rounded-lg mt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-orange-700">Total Actual Land Cost</span>
+                    <span className="text-xl font-bold text-orange-800">{formatCurrency(actualLandTotal)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ACTUAL DEVELOPMENT COST */}
+            <Card className="border-2 border-emerald-200">
+              <CardHeader className="bg-emerald-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg text-emerald-800">Actual Development Cost</CardTitle>
+                    <CardDescription>Cost incurred till date</CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => { fetchActualCostsFromProgress(); fetchActualSiteExpenditure(); }}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
             <CardContent className="p-6 space-y-6">
               {/* 1. Construction Cost */}
               <div className="space-y-3">
@@ -3552,63 +3956,7 @@ const ProjectCostsPage = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Land Costs Section */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Estimated Land Cost */}
-          <Card>
-            <CardHeader className="bg-slate-50">
-              <CardTitle className="text-lg">Estimated Land Cost</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <CurrencyInput
-                value={cost.estimated_land_cost}
-                onChange={(val) => handleChange("estimated_land_cost", val)}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Actual Land Costs */}
-          <Card>
-            <CardHeader className="bg-slate-50">
-              <CardTitle className="text-lg">Actual Land Cost</CardTitle>
-              <CardDescription>Total: {formatCurrency(totalLandCost)}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4 p-6">
-              <div>
-                <Label className="form-label text-xs">Land Acquisition</Label>
-                <CurrencyInput value={cost.land_acquisition_cost} onChange={(val) => handleChange("land_acquisition_cost", val)} />
-              </div>
-              <div>
-                <Label className="form-label text-xs">Dev. Rights Premium</Label>
-                <CurrencyInput value={cost.development_rights_premium} onChange={(val) => handleChange("development_rights_premium", val)} />
-              </div>
-              <div>
-                <Label className="form-label text-xs">TDR Cost</Label>
-                <CurrencyInput value={cost.tdr_cost} onChange={(val) => handleChange("tdr_cost", val)} />
-              </div>
-              <div>
-                <Label className="form-label text-xs">Stamp Duty</Label>
-                <CurrencyInput value={cost.stamp_duty} onChange={(val) => handleChange("stamp_duty", val)} />
-              </div>
-              <div>
-                <Label className="form-label text-xs">Govt. Charges</Label>
-                <CurrencyInput value={cost.government_charges} onChange={(val) => handleChange("government_charges", val)} />
-              </div>
-              <div>
-                <Label className="form-label text-xs">Encumbrance Removal</Label>
-                <CurrencyInput value={cost.encumbrance_removal} onChange={(val) => handleChange("encumbrance_removal", val)} />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex justify-end">
-          <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save Cost Data
-          </Button>
+          </div>
         </div>
       </div>
     </Layout>

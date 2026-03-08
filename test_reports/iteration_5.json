@@ -1,0 +1,123 @@
+{
+  "summary": "Land Cost Feature Testing Complete - All features implemented and working correctly. Backend (9/9 tests passed) and Frontend (all UI tests passed). New Land Cost page with 10 cost fields for both Estimated and Actual costs, navigation positioned correctly, and Project Costs page shows auto-populated read-only values.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Backend: GET /api/land-cost/{project_id} returns 200",
+    "Backend: GET /api/land-cost returns correct structure with estimated and actual sections",
+    "Backend: POST /api/land-cost/{project_id} saves data correctly",
+    "Backend: POST /api/land-cost data persists (Create -> GET verification)",
+    "Backend: GET /api/land-cost returns defaults for empty project",
+    "Backend: Land cost total calculation is correct (sum of all 10 fields)",
+    "Backend: Zero values handled correctly",
+    "Backend: Land cost endpoints require authentication",
+    "Backend: Integration - land cost data available for Project Costs page",
+    "Frontend: Land Cost page exists at /land-cost route",
+    "Frontend: Navigation sidebar shows 'Land Cost' link between Projects and Buildings & Infra",
+    "Frontend: Land Cost page has project selector dropdown",
+    "Frontend: Land Cost page has Estimated Land Cost section with all 10 fields (a-j)",
+    "Frontend: Land Cost page has Actual Land Cost section with all 10 fields (a-j)",
+    "Frontend: Land Cost page calculates and displays totals for both sections",
+    "Frontend: Save button saves data to backend",
+    "Frontend: Project Costs page shows Estimated Land Cost as read-only with 'Auto-populated' badge",
+    "Frontend: Project Costs page shows Actual Land Cost as read-only with 'Auto-populated' badge",
+    "Frontend: Data flows correctly from Land Cost page to Project Costs page (values match)"
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_land_cost.py",
+    "/app/test_reports/pytest/pytest_land_cost.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_land_cost.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (All UI components verified)"
+  },
+  
+  "test_credentials": {
+    "email": "test@example.com",
+    "password": "test123"
+  },
+  
+  "seed_data_creation": "Test data created for land-cost with values for all 10 fields in both estimated and actual sections",
+  
+  "retest_needed": false,
+  
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "Land Cost feature fully tested. Two main pages involved: 1) Land Cost page (/land-cost) for entering both estimated and actual land costs with 10 fields each (a-j), 2) Project Costs page (/costs) displays both sections as read-only with 'Auto-populated from Land Cost page' badge. Backend endpoints: GET/POST /api/land-cost/{project_id}. Data flows correctly between pages.",
+  
+  "features_verified": {
+    "land_cost_page": {
+      "route": "/land-cost",
+      "endpoint": "GET/POST /api/land-cost/{project_id}",
+      "status": "PASS",
+      "details": "New page with project selector, 10 cost fields (a-j) for both Estimated and Actual sections, totals display, and save functionality."
+    },
+    "navigation": {
+      "status": "PASS",
+      "details": "Land Cost link positioned correctly in sidebar between Projects and Buildings & Infra."
+    },
+    "cost_fields": {
+      "status": "PASS",
+      "fields": [
+        "a) Land Cost",
+        "b) Premium Cost (FSI)",
+        "c) TDR Cost",
+        "d) Statutory Cost",
+        "e) Land Premium (ASR)",
+        "f) Under Rehab Scheme",
+        "g) Estimated Cost for Rehab (Engineer)",
+        "h) Actual Cost of Rehab (CA)",
+        "i) Cost towards Land Clearance",
+        "j) Cost of ASR Linked Premium"
+      ]
+    },
+    "project_costs_integration": {
+      "page": "Project Costs (/costs)",
+      "status": "PASS",
+      "details": "Shows Estimated Land Cost and Actual Land Cost sections with 'Auto-populated from Land Cost page' badge. All 10 fields displayed as read-only (disabled inputs). Refresh button to reload data from Land Cost page."
+    },
+    "data_flow": {
+      "status": "PASS",
+      "details": "Data entered on Land Cost page correctly appears on Project Costs page as read-only. Values match exactly between both pages."
+    }
+  },
+  
+  "test_data_sample": {
+    "estimated": {
+      "land_cost": 10000000,
+      "premium_cost": 2000000,
+      "tdr_cost": 1000000,
+      "statutory_cost": 500000,
+      "land_premium": 800000,
+      "total": 14650000
+    },
+    "actual": {
+      "land_cost": 10500000,
+      "premium_cost": 2100000,
+      "tdr_cost": 980000,
+      "statutory_cost": 520000,
+      "land_premium": 800000,
+      "total": 15250000
+    }
+  }
+}

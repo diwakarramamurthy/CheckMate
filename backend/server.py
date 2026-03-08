@@ -1363,6 +1363,78 @@ async def save_actual_site_expenditure(
     return expenditure_doc
 
 # =========================
+# LAND COST ROUTES
+# =========================
+
+@api_router.get("/land-cost/{project_id}")
+async def get_land_cost(
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get land cost data for a project (both estimated and actual)"""
+    land_cost = await db.land_costs.find_one({"project_id": project_id}, {"_id": 0})
+    
+    default_fields = {
+        "land_cost": 0,
+        "premium_cost": 0,
+        "tdr_cost": 0,
+        "statutory_cost": 0,
+        "land_premium": 0,
+        "under_rehab_scheme": 0,
+        "estimated_rehab_cost": 0,
+        "actual_rehab_cost": 0,
+        "land_clearance_cost": 0,
+        "asr_linked_premium": 0
+    }
+    
+    if not land_cost:
+        return {
+            "project_id": project_id,
+            "estimated": {**default_fields, "total": 0},
+            "actual": {**default_fields, "total": 0}
+        }
+    return land_cost
+
+@api_router.post("/land-cost/{project_id}")
+async def save_land_cost(
+    project_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save land cost data for a project (both estimated and actual)"""
+    data = await request.json()
+    
+    def extract_costs(cost_data):
+        fields = [
+            "land_cost", "premium_cost", "tdr_cost", "statutory_cost",
+            "land_premium", "under_rehab_scheme", "estimated_rehab_cost",
+            "actual_rehab_cost", "land_clearance_cost", "asr_linked_premium"
+        ]
+        extracted = {f: cost_data.get(f, 0) or 0 for f in fields}
+        extracted["total"] = sum(extracted.values())
+        return extracted
+    
+    estimated = extract_costs(data.get("estimated", {}))
+    actual = extract_costs(data.get("actual", {}))
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    land_cost_doc = {
+        "project_id": project_id,
+        "estimated": estimated,
+        "actual": actual,
+        "updated_at": now
+    }
+    
+    await db.land_costs.update_one(
+        {"project_id": project_id},
+        {"$set": land_cost_doc},
+        upsert=True
+    )
+    
+    return land_cost_doc
+
+# =========================
 # CONSTRUCTION PROGRESS ROUTES
 # =========================
 
