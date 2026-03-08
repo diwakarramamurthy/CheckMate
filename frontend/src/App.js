@@ -3027,6 +3027,19 @@ const ProjectCostsPage = () => {
                     />
                   </div>
                 </div>
+                <div className="pl-4 mt-3 pt-2 border-t border-dashed">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-slate-600">Sub-total (On Site Expenditure)</span>
+                    <span className="font-semibold text-slate-700">{formatCurrency(
+                      (estimatedDevCost.site_development_cost || 0) + 
+                      (estimatedDevCost.salaries || 0) + 
+                      (estimatedDevCost.consultants_fee || 0) + 
+                      (estimatedDevCost.site_overheads || 0) + 
+                      (estimatedDevCost.services_cost || 0) + 
+                      (estimatedDevCost.machinery_cost || 0)
+                    )}</span>
+                  </div>
+                </div>
               </div>
 
               {/* 3. Taxes, Premiums, Fees */}
@@ -3158,6 +3171,19 @@ const ProjectCostsPage = () => {
                       value={cost.equipment_cost || 0}
                       onChange={(val) => handleChange("equipment_cost", val)}
                     />
+                  </div>
+                </div>
+                <div className="pl-4 mt-3 pt-2 border-t border-dashed">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-slate-600">Sub-total (On Site Expenditure)</span>
+                    <span className="font-semibold text-emerald-700">{formatCurrency(
+                      (cost.site_development_cost || 0) + 
+                      (cost.salaries || 0) + 
+                      (cost.consultants_fee || 0) + 
+                      (cost.site_overheads || 0) + 
+                      (cost.services_cost || 0) + 
+                      (cost.equipment_cost || 0)
+                    )}</span>
                   </div>
                 </div>
               </div>
