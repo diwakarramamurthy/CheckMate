@@ -1451,7 +1451,13 @@ const LandCostPage = () => {
   };
 
   const calculateTotal = (costs) => {
-    return Object.values(costs).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+    // Only sum the actual cost fields, not the 'total' field itself
+    const costFields = [
+      'land_cost', 'premium_cost', 'tdr_cost', 'statutory_cost',
+      'land_premium', 'under_rehab_scheme', 'estimated_rehab_cost',
+      'actual_rehab_cost', 'land_clearance_cost', 'asr_linked_premium'
+    ];
+    return costFields.reduce((sum, field) => sum + (parseFloat(costs[field]) || 0), 0);
   };
 
   const saveLandCost = async () => {
