@@ -1134,14 +1134,14 @@ async def create_estimated_development_cost(
 async def get_estimated_development_cost(project_id: str, current_user: dict = Depends(get_current_user)):
     estimate = await db.estimated_development_costs.find_one({"project_id": project_id}, {"_id": 0})
     
+    # Always get latest buildings and infrastructure costs
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+    buildings_cost = sum(b.get("estimated_cost", 0) for b in buildings)
+    
+    infra_cost = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
+    infrastructure_cost = infra_cost.get("total_infrastructure_cost", 0) if infra_cost else 0
+    
     if not estimate:
-        # Calculate current values
-        buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(100)
-        buildings_cost = sum(b.get("estimated_cost", 0) for b in buildings)
-        
-        infra_cost = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
-        infrastructure_cost = infra_cost.get("total_infrastructure_cost", 0) if infra_cost else 0
-        
         return {
             "project_id": project_id,
             "buildings_cost": buildings_cost,
@@ -1151,6 +1151,14 @@ async def get_estimated_development_cost(project_id: str, current_user: dict = D
             "total_estimated_development_cost": buildings_cost + infrastructure_cost,
             "is_draft": True
         }
+    
+    # Update with latest auto-calculated values
+    estimate["buildings_cost"] = buildings_cost
+    estimate["infrastructure_cost"] = infrastructure_cost
+    estimate["total_estimated_development_cost"] = (
+        buildings_cost + infrastructure_cost + 
+        estimate.get("consultants_fee", 0) + estimate.get("machinery_cost", 0)
+    )
     
     return estimate
 
