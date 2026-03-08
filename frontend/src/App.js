@@ -2604,7 +2604,13 @@ const ProjectCostsPage = () => {
     taxes_statutory: 0,
     finance_cost: 0,
     estimated_land_cost: 0,
-    estimated_development_cost: 0
+    estimated_development_cost: 0,
+    // New fields for matching structure
+    site_development_cost: 0,
+    salaries: 0,
+    consultants_fee: 0,
+    site_overheads: 0,
+    services_cost: 0
   });
   const [saving, setSaving] = useState(false);
   
@@ -2612,8 +2618,16 @@ const ProjectCostsPage = () => {
   const [estimatedDevCost, setEstimatedDevCost] = useState({
     buildings_cost: 0,
     infrastructure_cost: 0,
+    // On Site Expenditure
+    site_development_cost: 0,
+    salaries: 0,
     consultants_fee: 0,
+    site_overheads: 0,
+    services_cost: 0,
     machinery_cost: 0,
+    // Taxes & Finance
+    taxes_premiums_fees: 0,
+    finance_cost: 0,
     total: 0,
     is_locked: false
   });
@@ -2658,13 +2672,31 @@ const ProjectCostsPage = () => {
   const fetchEstimatedDevCost = async () => {
     try {
       const res = await axios.get(`${API}/estimated-development-cost/${selectedProject}`);
+      const data = res.data;
+      const total = (data.buildings_cost || 0) + 
+                    (data.infrastructure_cost || 0) + 
+                    (data.site_development_cost || 0) +
+                    (data.salaries || 0) +
+                    (data.consultants_fee || 0) + 
+                    (data.site_overheads || 0) +
+                    (data.services_cost || 0) +
+                    (data.machinery_cost || 0) +
+                    (data.taxes_premiums_fees || 0) +
+                    (data.finance_cost || 0);
+      
       setEstimatedDevCost({
-        buildings_cost: res.data.buildings_cost || 0,
-        infrastructure_cost: res.data.infrastructure_cost || 0,
-        consultants_fee: res.data.consultants_fee || 0,
-        machinery_cost: res.data.machinery_cost || 0,
-        total: res.data.total_estimated_development_cost || 0,
-        is_locked: !res.data.is_draft
+        buildings_cost: data.buildings_cost || 0,
+        infrastructure_cost: data.infrastructure_cost || 0,
+        site_development_cost: data.site_development_cost || 0,
+        salaries: data.salaries || 0,
+        consultants_fee: data.consultants_fee || 0,
+        site_overheads: data.site_overheads || 0,
+        services_cost: data.services_cost || 0,
+        machinery_cost: data.machinery_cost || 0,
+        taxes_premiums_fees: data.taxes_premiums_fees || 0,
+        finance_cost: data.finance_cost || 0,
+        total: data.total_estimated_development_cost || total,
+        is_locked: !data.is_draft
       });
     } catch (err) {
       console.error(err);
@@ -2733,12 +2765,19 @@ const ProjectCostsPage = () => {
   const refreshBuildingsInfraCost = async () => {
     try {
       const res = await axios.get(`${API}/estimated-development-cost/${selectedProject}/refresh-buildings`);
-      setEstimatedDevCost(prev => ({
-        ...prev,
-        buildings_cost: res.data.buildings_cost,
-        infrastructure_cost: res.data.infrastructure_cost,
-        total: res.data.buildings_cost + res.data.infrastructure_cost + prev.consultants_fee + prev.machinery_cost
-      }));
+      setEstimatedDevCost(prev => {
+        const updated = {
+          ...prev,
+          buildings_cost: res.data.buildings_cost,
+          infrastructure_cost: res.data.infrastructure_cost
+        };
+        updated.total = updated.buildings_cost + updated.infrastructure_cost + 
+                        updated.site_development_cost + updated.salaries +
+                        updated.consultants_fee + updated.site_overheads +
+                        updated.services_cost + updated.machinery_cost +
+                        updated.taxes_premiums_fees + updated.finance_cost;
+        return updated;
+      });
       toast.success("Buildings & Infrastructure costs refreshed");
     } catch (err) {
       toast.error("Failed to refresh costs");
@@ -2749,8 +2788,14 @@ const ProjectCostsPage = () => {
     setSaving(true);
     try {
       await axios.post(`${API}/estimated-development-cost?project_id=${selectedProject}`, {
+        site_development_cost: estimatedDevCost.site_development_cost,
+        salaries: estimatedDevCost.salaries,
         consultants_fee: estimatedDevCost.consultants_fee,
-        machinery_cost: estimatedDevCost.machinery_cost
+        site_overheads: estimatedDevCost.site_overheads,
+        services_cost: estimatedDevCost.services_cost,
+        machinery_cost: estimatedDevCost.machinery_cost,
+        taxes_premiums_fees: estimatedDevCost.taxes_premiums_fees,
+        finance_cost: estimatedDevCost.finance_cost
       });
       toast.success("Estimated Development Cost saved and locked");
       fetchEstimatedDevCost();
@@ -2769,7 +2814,11 @@ const ProjectCostsPage = () => {
     const newValue = parseFloat(value) || 0;
     setEstimatedDevCost(prev => {
       const updated = { ...prev, [field]: newValue };
-      updated.total = updated.buildings_cost + updated.infrastructure_cost + updated.consultants_fee + updated.machinery_cost;
+      updated.total = updated.buildings_cost + updated.infrastructure_cost + 
+                      updated.site_development_cost + updated.salaries +
+                      updated.consultants_fee + updated.site_overheads +
+                      updated.services_cost + updated.machinery_cost +
+                      updated.taxes_premiums_fees + updated.finance_cost;
       return updated;
     });
   };
@@ -2779,7 +2828,10 @@ const ProjectCostsPage = () => {
   
   // Use actual costs from progress for construction and infrastructure
   const totalDevCost = actualCosts.construction_cost + actualCosts.infrastructure_cost + 
-    cost.equipment_cost + cost.taxes_statutory + cost.finance_cost;
+    (cost.site_development_cost || 0) + (cost.salaries || 0) +
+    (cost.consultants_fee || 0) + (cost.site_overheads || 0) +
+    (cost.services_cost || 0) + (cost.equipment_cost || 0) + 
+    cost.taxes_statutory + cost.finance_cost;
   
   const totalEstimated = cost.estimated_land_cost + estimatedDevCost.total;
   const totalIncurred = totalLandCost + totalDevCost;
@@ -2877,106 +2929,297 @@ const ProjectCostsPage = () => {
           </Card>
         </div>
 
-        {/* Cost Forms */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Estimated Development Cost Breakdown - NEW */}
-          <Card className="md:col-span-2 border-2 border-blue-200">
+        {/* Cost Forms - Two Column Layout: Estimated vs Actual */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          
+          {/* LEFT COLUMN: ESTIMATED DEVELOPMENT COST */}
+          <Card className="border-2 border-blue-200">
             <CardHeader className="bg-blue-50">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg text-blue-800">Estimated Development Cost Breakdown</CardTitle>
-                  <CardDescription>This total is fixed once saved and used in all quarterly reports</CardDescription>
+                  <CardTitle className="text-lg text-blue-800">Estimated Development Cost</CardTitle>
+                  <CardDescription>Fixed once saved - used in all quarterly reports</CardDescription>
                 </div>
                 {!estimatedDevCost.is_locked && (
                   <Button variant="outline" size="sm" onClick={refreshBuildingsInfraCost}>
                     <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh from Buildings
+                    Refresh
                   </Button>
                 )}
               </div>
             </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div>
-                  <Label className="form-label">1. Buildings Cost</Label>
-                  <CurrencyInput
-                    value={estimatedDevCost.buildings_cost}
-                    onChange={() => {}}
-                    disabled
-                    className="bg-slate-100 font-medium"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">Auto-calculated from Buildings section</p>
-                </div>
-                <div>
-                  <Label className="form-label">2. Infrastructure Cost</Label>
-                  <CurrencyInput
-                    value={estimatedDevCost.infrastructure_cost}
-                    onChange={() => {}}
-                    disabled
-                    className="bg-slate-100 font-medium"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">From Infrastructure Works section</p>
-                </div>
-                <div>
-                  <Label className="form-label">3. Consultants Fee</Label>
-                  <CurrencyInput
-                    value={estimatedDevCost.consultants_fee}
-                    onChange={(val) => handleEstimatedChange("consultants_fee", val)}
-                    disabled={estimatedDevCost.is_locked}
-                  />
-                  <p className="text-xs text-slate-500 mt-1">Manual input</p>
-                </div>
-                <div>
-                  <Label className="form-label">4. Cost of Machineries</Label>
-                  <CurrencyInput
-                    value={estimatedDevCost.machinery_cost}
-                    onChange={(val) => handleEstimatedChange("machinery_cost", val)}
-                    disabled={estimatedDevCost.is_locked}
-                  />
-                  <p className="text-xs text-slate-500 mt-1">Manual input</p>
+            <CardContent className="p-6 space-y-6">
+              {/* 1. Construction Cost */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">1. Construction Cost</h4>
+                <div className="grid grid-cols-2 gap-4 pl-4">
+                  <div>
+                    <Label className="form-label text-xs">a. Buildings</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.buildings_cost}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-slate-100"
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">b. Infrastructure</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.infrastructure_cost}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-slate-100"
+                    />
+                  </div>
                 </div>
               </div>
-              <Separator className="my-6" />
-              <div className="flex items-center justify-between">
+
+              {/* 2. On Site Expenditure */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">2. On Site Expenditure for Development</h4>
+                <div className="grid grid-cols-2 gap-4 pl-4">
+                  <div>
+                    <Label className="form-label text-xs">a. Development Cost (Site office, etc.)</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.site_development_cost || 0}
+                      onChange={(val) => handleEstimatedChange("site_development_cost", val)}
+                      disabled={estimatedDevCost.is_locked}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">b. Salaries</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.salaries || 0}
+                      onChange={(val) => handleEstimatedChange("salaries", val)}
+                      disabled={estimatedDevCost.is_locked}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">c. Consultants Fee</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.consultants_fee || 0}
+                      onChange={(val) => handleEstimatedChange("consultants_fee", val)}
+                      disabled={estimatedDevCost.is_locked}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">d. Site Over-heads</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.site_overheads || 0}
+                      onChange={(val) => handleEstimatedChange("site_overheads", val)}
+                      disabled={estimatedDevCost.is_locked}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">e. Cost of Services (Water, Elec.)</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.services_cost || 0}
+                      onChange={(val) => handleEstimatedChange("services_cost", val)}
+                      disabled={estimatedDevCost.is_locked}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">f. Machineries & Equipment</Label>
+                    <CurrencyInput
+                      value={estimatedDevCost.machinery_cost || 0}
+                      onChange={(val) => handleEstimatedChange("machinery_cost", val)}
+                      disabled={estimatedDevCost.is_locked}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Taxes, Premiums, Fees */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">3. Payment of Taxes, Premiums, Fees Etc.</h4>
+                <div className="pl-4">
+                  <CurrencyInput
+                    value={estimatedDevCost.taxes_premiums_fees || 0}
+                    onChange={(val) => handleEstimatedChange("taxes_premiums_fees", val)}
+                    disabled={estimatedDevCost.is_locked}
+                  />
+                </div>
+              </div>
+
+              {/* 4. Finance Cost */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">4. Finance Cost</h4>
+                <div className="pl-4">
+                  <CurrencyInput
+                    value={estimatedDevCost.finance_cost || 0}
+                    onChange={(val) => handleEstimatedChange("finance_cost", val)}
+                    disabled={estimatedDevCost.is_locked}
+                  />
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+              <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg">
                 <div>
-                  <p className="text-sm text-slate-500">Total Estimated Development Cost</p>
-                  <p className="text-3xl font-bold text-blue-700 currency">{formatCurrency(estimatedDevCost.total)}</p>
+                  <p className="text-sm text-blue-600">Total Estimated Development Cost</p>
+                  <p className="text-2xl font-bold text-blue-800 currency">{formatCurrency(estimatedDevCost.total)}</p>
                   {estimatedDevCost.is_locked && (
-                    <Badge variant="secondary" className="mt-2">Locked - Used in all reports</Badge>
+                    <Badge variant="secondary" className="mt-1">Locked</Badge>
                   )}
                 </div>
                 {!estimatedDevCost.is_locked && (
                   <Button onClick={saveEstimatedDevCost} className="bg-blue-600 hover:bg-blue-700">
-                    Save & Lock Estimate
+                    Save & Lock
                   </Button>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Estimated Land Cost */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Estimated Land Cost</CardTitle>
+          {/* RIGHT COLUMN: ACTUAL DEVELOPMENT COST */}
+          <Card className="border-2 border-emerald-200">
+            <CardHeader className="bg-emerald-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg text-emerald-800">Actual Development Cost</CardTitle>
+                  <CardDescription>Cost incurred till date</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={fetchActualCostsFromProgress}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="form-label">Estimated Land Cost (₹)</Label>
-                <CurrencyInput
-                  value={cost.estimated_land_cost}
-                  onChange={(val) => handleChange("estimated_land_cost", val)}
-                />
+            <CardContent className="p-6 space-y-6">
+              {/* 1. Construction Cost */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">1. Construction Cost</h4>
+                <div className="grid grid-cols-2 gap-4 pl-4">
+                  <div>
+                    <Label className="form-label text-xs">a. Buildings</Label>
+                    <CurrencyInput
+                      value={actualCosts.construction_cost}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
+                    />
+                    <p className="text-xs text-emerald-600 mt-1">{formatNumber(actualCosts.construction_completion, 1)}% done</p>
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">b. Infrastructure</Label>
+                    <CurrencyInput
+                      value={actualCosts.infrastructure_cost}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
+                    />
+                    <p className="text-xs text-emerald-600 mt-1">{formatNumber(actualCosts.infrastructure_completion, 1)}% done</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. On Site Expenditure */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">2. On Site Expenditure for Development</h4>
+                <div className="grid grid-cols-2 gap-4 pl-4">
+                  <div>
+                    <Label className="form-label text-xs">a. Development Cost (Site office, etc.)</Label>
+                    <CurrencyInput
+                      value={cost.site_development_cost || 0}
+                      onChange={(val) => handleChange("site_development_cost", val)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">b. Salaries</Label>
+                    <CurrencyInput
+                      value={cost.salaries || 0}
+                      onChange={(val) => handleChange("salaries", val)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">c. Consultants Fee</Label>
+                    <CurrencyInput
+                      value={cost.consultants_fee || 0}
+                      onChange={(val) => handleChange("consultants_fee", val)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">d. Site Over-heads</Label>
+                    <CurrencyInput
+                      value={cost.site_overheads || 0}
+                      onChange={(val) => handleChange("site_overheads", val)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">e. Cost of Services (Water, Elec.)</Label>
+                    <CurrencyInput
+                      value={cost.services_cost || 0}
+                      onChange={(val) => handleChange("services_cost", val)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="form-label text-xs">f. Machineries & Equipment</Label>
+                    <CurrencyInput
+                      value={cost.equipment_cost || 0}
+                      onChange={(val) => handleChange("equipment_cost", val)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Taxes, Premiums, Fees */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">3. Payment of Taxes, Premiums, Fees Etc.</h4>
+                <div className="pl-4">
+                  <CurrencyInput
+                    value={cost.taxes_statutory || 0}
+                    onChange={(val) => handleChange("taxes_statutory", val)}
+                  />
+                </div>
+              </div>
+
+              {/* 4. Finance Cost */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-700 border-b pb-1">4. Finance Cost</h4>
+                <div className="pl-4">
+                  <CurrencyInput
+                    value={cost.finance_cost || 0}
+                    onChange={(val) => handleChange("finance_cost", val)}
+                  />
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+              <div className="flex items-center justify-between bg-emerald-50 p-4 rounded-lg">
+                <div>
+                  <p className="text-sm text-emerald-600">Total Actual Development Cost</p>
+                  <p className="text-2xl font-bold text-emerald-800 currency">{formatCurrency(totalDevCost)}</p>
+                </div>
+                <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700">
+                  Save Costs
+                </Button>
               </div>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Land Costs */}
+        {/* Land Costs Section */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Estimated Land Cost */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Land Costs (Actual)</CardTitle>
+            <CardHeader className="bg-slate-50">
+              <CardTitle className="text-lg">Estimated Land Cost</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <CurrencyInput
+                value={cost.estimated_land_cost}
+                onChange={(val) => handleChange("estimated_land_cost", val)}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Actual Land Costs */}
+          <Card>
+            <CardHeader className="bg-slate-50">
+              <CardTitle className="text-lg">Actual Land Cost</CardTitle>
               <CardDescription>Total: {formatCurrency(totalLandCost)}</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
+            <CardContent className="grid grid-cols-2 gap-4 p-6">
               <div>
                 <Label className="form-label text-xs">Land Acquisition</Label>
                 <CurrencyInput value={cost.land_acquisition_cost} onChange={(val) => handleChange("land_acquisition_cost", val)} />
@@ -3000,60 +3243,6 @@ const ProjectCostsPage = () => {
               <div>
                 <Label className="form-label text-xs">Encumbrance Removal</Label>
                 <CurrencyInput value={cost.encumbrance_removal} onChange={(val) => handleChange("encumbrance_removal", val)} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Development Costs */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Development Costs (Actual)</CardTitle>
-                  <CardDescription>Total: {formatCurrency(totalDevCost)}</CardDescription>
-                </div>
-                <Button variant="outline" size="sm" onClick={fetchActualCostsFromProgress}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh from Progress
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div>
-                <Label className="form-label text-xs">Construction</Label>
-                <CurrencyInput 
-                  value={actualCosts.construction_cost} 
-                  onChange={() => {}}
-                  disabled 
-                  className="bg-green-50 border-green-200 font-medium"
-                />
-                <p className="text-xs text-green-600 mt-1">
-                  {formatNumber(actualCosts.construction_completion, 1)}% complete
-                </p>
-              </div>
-              <div>
-                <Label className="form-label text-xs">Infrastructure</Label>
-                <CurrencyInput 
-                  value={actualCosts.infrastructure_cost} 
-                  onChange={() => {}}
-                  disabled 
-                  className="bg-green-50 border-green-200 font-medium"
-                />
-                <p className="text-xs text-green-600 mt-1">
-                  {formatNumber(actualCosts.infrastructure_completion, 1)}% complete
-                </p>
-              </div>
-              <div>
-                <Label className="form-label text-xs">Equipment</Label>
-                <CurrencyInput value={cost.equipment_cost} onChange={(val) => handleChange("equipment_cost", val)} />
-              </div>
-              <div>
-                <Label className="form-label text-xs">Taxes & Statutory</Label>
-                <CurrencyInput value={cost.taxes_statutory} onChange={(val) => handleChange("taxes_statutory", val)} />
-              </div>
-              <div>
-                <Label className="form-label text-xs">Finance Cost</Label>
-                <CurrencyInput value={cost.finance_cost} onChange={(val) => handleChange("finance_cost", val)} />
               </div>
             </CardContent>
           </Card>

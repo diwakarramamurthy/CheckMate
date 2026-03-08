@@ -1103,9 +1103,18 @@ async def create_estimated_development_cost(
     # Get manual inputs
     consultants_fee = data.get("consultants_fee", 0)
     machinery_cost = data.get("machinery_cost", 0)
+    site_development_cost = data.get("site_development_cost", 0)
+    salaries = data.get("salaries", 0)
+    site_overheads = data.get("site_overheads", 0)
+    services_cost = data.get("services_cost", 0)
+    taxes_premiums_fees = data.get("taxes_premiums_fees", 0)
+    finance_cost = data.get("finance_cost", 0)
     
     # Calculate total
-    total = buildings_cost + infrastructure_cost + consultants_fee + machinery_cost
+    total = (buildings_cost + infrastructure_cost + 
+             site_development_cost + salaries + consultants_fee +
+             site_overheads + services_cost + machinery_cost +
+             taxes_premiums_fees + finance_cost)
     
     estimate_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -1115,8 +1124,14 @@ async def create_estimated_development_cost(
         "project_id": project_id,
         "buildings_cost": buildings_cost,
         "infrastructure_cost": infrastructure_cost,
+        "site_development_cost": site_development_cost,
+        "salaries": salaries,
         "consultants_fee": consultants_fee,
+        "site_overheads": site_overheads,
+        "services_cost": services_cost,
         "machinery_cost": machinery_cost,
+        "taxes_premiums_fees": taxes_premiums_fees,
+        "finance_cost": finance_cost,
         "total_estimated_development_cost": total,
         "created_at": now,
         "updated_at": now
@@ -1146,8 +1161,14 @@ async def get_estimated_development_cost(project_id: str, current_user: dict = D
             "project_id": project_id,
             "buildings_cost": buildings_cost,
             "infrastructure_cost": infrastructure_cost,
+            "site_development_cost": 0,
+            "salaries": 0,
             "consultants_fee": 0,
+            "site_overheads": 0,
+            "services_cost": 0,
             "machinery_cost": 0,
+            "taxes_premiums_fees": 0,
+            "finance_cost": 0,
             "total_estimated_development_cost": buildings_cost + infrastructure_cost,
             "is_draft": True
         }
@@ -1157,7 +1178,10 @@ async def get_estimated_development_cost(project_id: str, current_user: dict = D
     estimate["infrastructure_cost"] = infrastructure_cost
     estimate["total_estimated_development_cost"] = (
         buildings_cost + infrastructure_cost + 
-        estimate.get("consultants_fee", 0) + estimate.get("machinery_cost", 0)
+        estimate.get("site_development_cost", 0) + estimate.get("salaries", 0) +
+        estimate.get("consultants_fee", 0) + estimate.get("site_overheads", 0) +
+        estimate.get("services_cost", 0) + estimate.get("machinery_cost", 0) +
+        estimate.get("taxes_premiums_fees", 0) + estimate.get("finance_cost", 0)
     )
     
     return estimate
