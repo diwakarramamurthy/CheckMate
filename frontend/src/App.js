@@ -1386,6 +1386,17 @@ const BuildingsPage = () => {
   const [totalInfraCost, setTotalInfraCost] = useState(0);
   const [totalBuildingsCost, setTotalBuildingsCost] = useState(0);
   
+  // On Site Expenditure state (Estimated)
+  const [siteExpenditure, setSiteExpenditure] = useState({
+    site_development_cost: 0,
+    salaries: 0,
+    consultants_fee: 0,
+    site_overheads: 0,
+    services_cost: 0,
+    machinery_cost: 0
+  });
+  const [totalSiteExpenditure, setTotalSiteExpenditure] = useState(0);
+  
   const defaultForm = {
     building_name: "",
     building_type: "residential_tower",
@@ -1414,6 +1425,7 @@ const BuildingsPage = () => {
     if (selectedProject) {
       fetchBuildings();
       fetchInfraCosts();
+      fetchSiteExpenditure();
     }
   }, [selectedProject]);
 
@@ -1429,7 +1441,16 @@ const BuildingsPage = () => {
       if (isApplicable) infraTotal += cost;
     });
     setTotalInfraCost(infraTotal);
-  }, [buildings, infraCosts, infraTemplate]);
+    
+    // Calculate site expenditure total
+    const siteTotal = (siteExpenditure.site_development_cost || 0) +
+                      (siteExpenditure.salaries || 0) +
+                      (siteExpenditure.consultants_fee || 0) +
+                      (siteExpenditure.site_overheads || 0) +
+                      (siteExpenditure.services_cost || 0) +
+                      (siteExpenditure.machinery_cost || 0);
+    setTotalSiteExpenditure(siteTotal);
+  }, [buildings, infraCosts, infraTemplate, siteExpenditure]);
 
   const fetchProjects = async () => {
     try {
@@ -1470,6 +1491,38 @@ const BuildingsPage = () => {
     } catch (err) {
       console.error("Failed to load infrastructure costs");
     }
+  };
+
+  const fetchSiteExpenditure = async () => {
+    try {
+      const res = await axios.get(`${API}/site-expenditure/${selectedProject}`);
+      setSiteExpenditure(res.data || {
+        site_development_cost: 0,
+        salaries: 0,
+        consultants_fee: 0,
+        site_overheads: 0,
+        services_cost: 0,
+        machinery_cost: 0
+      });
+    } catch (err) {
+      console.error("Failed to load site expenditure");
+    }
+  };
+
+  const saveSiteExpenditure = async () => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/site-expenditure?project_id=${selectedProject}`, siteExpenditure);
+      toast.success("Site expenditure saved");
+    } catch (err) {
+      toast.error("Failed to save site expenditure");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSiteExpenditureChange = (field, value) => {
+    setSiteExpenditure(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
   };
 
   const fetchBuildings = async () => {
@@ -1777,7 +1830,7 @@ const BuildingsPage = () => {
 
         {/* Summary Cards */}
         {selectedProject && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-slate-500">Total Buildings Cost</div>
@@ -1792,11 +1845,18 @@ const BuildingsPage = () => {
                 <div className="text-xs text-slate-400">{infraTemplate.length} items</div>
               </CardContent>
             </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-slate-500">On Site Expenditure</div>
+                <div className="text-2xl font-bold text-slate-900">{formatCurrency(totalSiteExpenditure)}</div>
+                <div className="text-xs text-slate-400">Estimated costs</div>
+              </CardContent>
+            </Card>
             <Card className="bg-blue-50">
               <CardContent className="p-4">
-                <div className="text-sm text-blue-600 font-medium">Combined Total</div>
-                <div className="text-2xl font-bold text-blue-700">{formatCurrency(totalBuildingsCost + totalInfraCost)}</div>
-                <div className="text-xs text-blue-500">Buildings + Infrastructure</div>
+                <div className="text-sm text-blue-600 font-medium">Total Estimated</div>
+                <div className="text-2xl font-bold text-blue-700">{formatCurrency(totalBuildingsCost + totalInfraCost + totalSiteExpenditure)}</div>
+                <div className="text-xs text-blue-500">Construction + Site Exp.</div>
               </CardContent>
             </Card>
           </div>
@@ -1819,6 +1879,14 @@ const BuildingsPage = () => {
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Infrastructure Works
+          </Button>
+          <Button
+            variant={activeTab === "site-expenditure" ? "default" : "outline"}
+            onClick={() => setActiveTab("site-expenditure")}
+            className={activeTab === "site-expenditure" ? "bg-blue-600" : ""}
+          >
+            <IndianRupee className="h-4 w-4 mr-2" />
+            On Site Expenditure
           </Button>
         </div>
 
@@ -1961,7 +2029,7 @@ const BuildingsPage = () => {
               </Card>
             )}
           </>
-        ) : (
+        ) : activeTab === "infrastructure" ? (
           /* Infrastructure Tab */
           <Card>
             <CardHeader>
@@ -2030,7 +2098,74 @@ const BuildingsPage = () => {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : activeTab === "site-expenditure" ? (
+          /* On Site Expenditure Tab */
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">On Site Expenditure for Development (Estimated)</CardTitle>
+              <CardDescription>Enter estimated costs for site operations and development</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                <div>
+                  <Label className="form-label">a. Development Cost (Site office, Toilets etc.)</Label>
+                  <CurrencyInput
+                    value={siteExpenditure.site_development_cost}
+                    onChange={(val) => handleSiteExpenditureChange("site_development_cost", val)}
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">b. Salaries</Label>
+                  <CurrencyInput
+                    value={siteExpenditure.salaries}
+                    onChange={(val) => handleSiteExpenditureChange("salaries", val)}
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">c. Consultants Fee</Label>
+                  <CurrencyInput
+                    value={siteExpenditure.consultants_fee}
+                    onChange={(val) => handleSiteExpenditureChange("consultants_fee", val)}
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">d. Site Over-heads</Label>
+                  <CurrencyInput
+                    value={siteExpenditure.site_overheads}
+                    onChange={(val) => handleSiteExpenditureChange("site_overheads", val)}
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">e. Cost of Services (Water, Electricity etc.)</Label>
+                  <CurrencyInput
+                    value={siteExpenditure.services_cost}
+                    onChange={(val) => handleSiteExpenditureChange("services_cost", val)}
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">f. Cost of Machineries and Equipment</Label>
+                  <CurrencyInput
+                    value={siteExpenditure.machinery_cost}
+                    onChange={(val) => handleSiteExpenditureChange("machinery_cost", val)}
+                  />
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg">
+                <div>
+                  <p className="text-sm text-blue-600">Total On Site Expenditure (Estimated)</p>
+                  <p className="text-2xl font-bold text-blue-800">{formatCurrency(totalSiteExpenditure)}</p>
+                </div>
+                <Button onClick={saveSiteExpenditure} className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
+                  {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Save Site Expenditure
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
       {/* Delete Building Confirmation Dialog */}
@@ -2104,6 +2239,17 @@ const ConstructionProgressPage = () => {
   const [categoryCompletions, setCategoryCompletions] = useState({});
   const [overallCompletion, setOverallCompletion] = useState(0);
   const [infraOverallCompletion, setInfraOverallCompletion] = useState(0);
+  
+  // Actual Site Expenditure state
+  const [actualSiteExpenditure, setActualSiteExpenditure] = useState({
+    site_development_cost: 0,
+    salaries: 0,
+    consultants_fee: 0,
+    site_overheads: 0,
+    services_cost: 0,
+    machinery_cost: 0
+  });
+  const [totalActualSiteExpenditure, setTotalActualSiteExpenditure] = useState(0);
 
   useEffect(() => {
     fetchProjects();
@@ -2113,6 +2259,7 @@ const ConstructionProgressPage = () => {
   useEffect(() => {
     if (selectedProject) {
       fetchBuildings();
+      fetchActualSiteExpenditure();
     }
   }, [selectedProject]);
 
@@ -2121,6 +2268,12 @@ const ConstructionProgressPage = () => {
       fetchProgress();
     }
   }, [selectedBuilding, quarter, year, template]);
+  
+  useEffect(() => {
+    if (selectedProject && quarter && year) {
+      fetchActualSiteExpenditure();
+    }
+  }, [selectedProject, quarter, year]);
 
   useEffect(() => {
     if (template) {
@@ -2138,6 +2291,61 @@ const ConstructionProgressPage = () => {
     const res = await axios.get(`${API}/buildings?project_id=${selectedProject}`);
     setBuildings(res.data);
     if (res.data.length > 0) setSelectedBuilding(res.data[0].building_id);
+  };
+
+  const fetchActualSiteExpenditure = async () => {
+    if (!selectedProject) return;
+    try {
+      const res = await axios.get(`${API}/actual-site-expenditure/${selectedProject}?quarter=${quarter}&year=${year}`);
+      setActualSiteExpenditure(res.data || {
+        site_development_cost: 0,
+        salaries: 0,
+        consultants_fee: 0,
+        site_overheads: 0,
+        services_cost: 0,
+        machinery_cost: 0
+      });
+      // Calculate total
+      const total = (res.data?.site_development_cost || 0) +
+                    (res.data?.salaries || 0) +
+                    (res.data?.consultants_fee || 0) +
+                    (res.data?.site_overheads || 0) +
+                    (res.data?.services_cost || 0) +
+                    (res.data?.machinery_cost || 0);
+      setTotalActualSiteExpenditure(total);
+    } catch (err) {
+      console.error("Failed to fetch actual site expenditure", err);
+    }
+  };
+
+  const handleActualSiteExpenditureChange = (field, value) => {
+    const numValue = parseFloat(value) || 0;
+    setActualSiteExpenditure(prev => {
+      const updated = { ...prev, [field]: numValue };
+      const total = (updated.site_development_cost || 0) +
+                    (updated.salaries || 0) +
+                    (updated.consultants_fee || 0) +
+                    (updated.site_overheads || 0) +
+                    (updated.services_cost || 0) +
+                    (updated.machinery_cost || 0);
+      setTotalActualSiteExpenditure(total);
+      return updated;
+    });
+  };
+
+  const saveActualSiteExpenditure = async () => {
+    setSaving(true);
+    try {
+      await axios.post(
+        `${API}/actual-site-expenditure?project_id=${selectedProject}&quarter=${quarter}&year=${year}`,
+        actualSiteExpenditure
+      );
+      toast.success("Actual site expenditure saved");
+    } catch (err) {
+      toast.error("Failed to save actual site expenditure");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const fetchTemplate = async () => {
@@ -2361,7 +2569,7 @@ const ConstructionProgressPage = () => {
         </Card>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant={activeTab === "tower" ? "default" : "outline"}
             onClick={() => setActiveTab("tower")}
@@ -2375,6 +2583,14 @@ const ConstructionProgressPage = () => {
             className={activeTab === "infrastructure" ? "bg-blue-600" : ""}
           >
             Infrastructure Works ({formatNumber(infraOverallCompletion, 1)}%)
+          </Button>
+          <Button
+            variant={activeTab === "site-expenditure" ? "default" : "outline"}
+            onClick={() => setActiveTab("site-expenditure")}
+            className={activeTab === "site-expenditure" ? "bg-emerald-600" : ""}
+            data-testid="actual-site-expenditure-tab"
+          >
+            Actual Site Expenditure
           </Button>
         </div>
 
@@ -2561,6 +2777,84 @@ const ConstructionProgressPage = () => {
               </Table>
             </CardContent>
           </Card>
+        ) : activeTab === "site-expenditure" && selectedProject ? (
+          /* Actual Site Expenditure Tab */
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Actual On Site Expenditure for Development</CardTitle>
+              <CardDescription>Enter actual costs incurred for {quarter} {year}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                <div>
+                  <Label className="form-label">a. Development Cost (Site office, Toilets etc.)</Label>
+                  <CurrencyInput
+                    value={actualSiteExpenditure.site_development_cost}
+                    onChange={(val) => handleActualSiteExpenditureChange("site_development_cost", val)}
+                    data-testid="actual-site-development-cost"
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">b. Salaries</Label>
+                  <CurrencyInput
+                    value={actualSiteExpenditure.salaries}
+                    onChange={(val) => handleActualSiteExpenditureChange("salaries", val)}
+                    data-testid="actual-salaries"
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">c. Consultants Fee</Label>
+                  <CurrencyInput
+                    value={actualSiteExpenditure.consultants_fee}
+                    onChange={(val) => handleActualSiteExpenditureChange("consultants_fee", val)}
+                    data-testid="actual-consultants-fee"
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">d. Site Over-heads</Label>
+                  <CurrencyInput
+                    value={actualSiteExpenditure.site_overheads}
+                    onChange={(val) => handleActualSiteExpenditureChange("site_overheads", val)}
+                    data-testid="actual-site-overheads"
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">e. Cost of Services (Water, Electricity etc.)</Label>
+                  <CurrencyInput
+                    value={actualSiteExpenditure.services_cost}
+                    onChange={(val) => handleActualSiteExpenditureChange("services_cost", val)}
+                    data-testid="actual-services-cost"
+                  />
+                </div>
+                <div>
+                  <Label className="form-label">f. Cost of Machineries and Equipment</Label>
+                  <CurrencyInput
+                    value={actualSiteExpenditure.machinery_cost}
+                    onChange={(val) => handleActualSiteExpenditureChange("machinery_cost", val)}
+                    data-testid="actual-machinery-cost"
+                  />
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="flex items-center justify-between bg-emerald-50 p-4 rounded-lg">
+                <div>
+                  <p className="text-sm text-emerald-600">Total On Site Expenditure (Actual) for {quarter} {year}</p>
+                  <p className="text-2xl font-bold text-emerald-800">{formatCurrency(totalActualSiteExpenditure)}</p>
+                </div>
+                <Button 
+                  onClick={saveActualSiteExpenditure} 
+                  className="bg-emerald-600 hover:bg-emerald-700" 
+                  disabled={saving}
+                  data-testid="save-actual-site-expenditure-btn"
+                >
+                  {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Save Site Expenditure
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <Card className="text-center py-12">
             <Building className="h-12 w-12 text-slate-300 mx-auto mb-4" />
@@ -2568,8 +2862,8 @@ const ConstructionProgressPage = () => {
           </Card>
         )}
 
-        {/* Save Button */}
-        {selectedBuilding && template && (
+        {/* Save Button - Only for Tower and Infrastructure tabs */}
+        {selectedBuilding && template && (activeTab === "tower" || activeTab === "infrastructure") && (
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => initializeActivities(template)}>
               Reset to Defaults
@@ -2639,6 +2933,17 @@ const ProjectCostsPage = () => {
     construction_completion: 0,
     infrastructure_completion: 0
   });
+  
+  // Actual Site Expenditure (from Construction Progress page)
+  const [actualSiteExpenditure, setActualSiteExpenditure] = useState({
+    site_development_cost: 0,
+    salaries: 0,
+    consultants_fee: 0,
+    site_overheads: 0,
+    services_cost: 0,
+    machinery_cost: 0,
+    total: 0
+  });
 
   useEffect(() => {
     fetchProjects();
@@ -2649,6 +2954,7 @@ const ProjectCostsPage = () => {
       fetchCost();
       fetchEstimatedDevCost();
       fetchActualCostsFromProgress();
+      fetchActualSiteExpenditure();
     }
   }, [selectedProject, quarter, year]);
 
@@ -2656,6 +2962,23 @@ const ProjectCostsPage = () => {
     const res = await axios.get(`${API}/projects`);
     setProjects(res.data);
     if (res.data.length > 0) setSelectedProject(res.data[0].project_id);
+  };
+  
+  const fetchActualSiteExpenditure = async () => {
+    try {
+      const res = await axios.get(`${API}/actual-site-expenditure/${selectedProject}?quarter=${quarter}&year=${year}`);
+      setActualSiteExpenditure({
+        site_development_cost: res.data.site_development_cost || 0,
+        salaries: res.data.salaries || 0,
+        consultants_fee: res.data.consultants_fee || 0,
+        site_overheads: res.data.site_overheads || 0,
+        services_cost: res.data.services_cost || 0,
+        machinery_cost: res.data.machinery_cost || 0,
+        total: res.data.total || 0
+      });
+    } catch (err) {
+      console.error("Failed to fetch actual site expenditure", err);
+    }
   };
 
   const fetchCost = async () => {
@@ -2826,11 +3149,9 @@ const ProjectCostsPage = () => {
   const totalLandCost = cost.land_acquisition_cost + cost.development_rights_premium + 
     cost.tdr_cost + cost.stamp_duty + cost.government_charges + cost.encumbrance_removal;
   
-  // Use actual costs from progress for construction and infrastructure
+  // Use actual costs from progress for construction and infrastructure, and actual site expenditure
   const totalDevCost = actualCosts.construction_cost + actualCosts.infrastructure_cost + 
-    (cost.site_development_cost || 0) + (cost.salaries || 0) +
-    (cost.consultants_fee || 0) + (cost.site_overheads || 0) +
-    (cost.services_cost || 0) + (cost.equipment_cost || 0) + 
+    (actualSiteExpenditure.total || 0) + 
     cost.taxes_statutory + cost.finance_cost;
   
   const totalEstimated = cost.estimated_land_cost + estimatedDevCost.total;
@@ -3092,7 +3413,7 @@ const ProjectCostsPage = () => {
                   <CardTitle className="text-lg text-emerald-800">Actual Development Cost</CardTitle>
                   <CardDescription>Cost incurred till date</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={fetchActualCostsFromProgress}>
+                <Button variant="outline" size="sm" onClick={() => { fetchActualCostsFromProgress(); fetchActualSiteExpenditure(); }}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
@@ -3128,62 +3449,71 @@ const ProjectCostsPage = () => {
 
               {/* 2. On Site Expenditure */}
               <div className="space-y-3">
-                <h4 className="font-semibold text-slate-700 border-b pb-1">2. On Site Expenditure for Development</h4>
+                <h4 className="font-semibold text-slate-700 border-b pb-1">
+                  2. On Site Expenditure for Development
+                  <Badge variant="secondary" className="ml-2 text-xs">Auto-populated</Badge>
+                </h4>
+                <p className="text-xs text-slate-500 pl-4">Data entered in Construction Progress page</p>
                 <div className="grid grid-cols-2 gap-4 pl-4">
                   <div>
                     <Label className="form-label text-xs">a. Development Cost (Site office, etc.)</Label>
                     <CurrencyInput
-                      value={cost.site_development_cost || 0}
-                      onChange={(val) => handleChange("site_development_cost", val)}
+                      value={actualSiteExpenditure.site_development_cost || 0}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
                     />
                   </div>
                   <div>
                     <Label className="form-label text-xs">b. Salaries</Label>
                     <CurrencyInput
-                      value={cost.salaries || 0}
-                      onChange={(val) => handleChange("salaries", val)}
+                      value={actualSiteExpenditure.salaries || 0}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
                     />
                   </div>
                   <div>
                     <Label className="form-label text-xs">c. Consultants Fee</Label>
                     <CurrencyInput
-                      value={cost.consultants_fee || 0}
-                      onChange={(val) => handleChange("consultants_fee", val)}
+                      value={actualSiteExpenditure.consultants_fee || 0}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
                     />
                   </div>
                   <div>
                     <Label className="form-label text-xs">d. Site Over-heads</Label>
                     <CurrencyInput
-                      value={cost.site_overheads || 0}
-                      onChange={(val) => handleChange("site_overheads", val)}
+                      value={actualSiteExpenditure.site_overheads || 0}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
                     />
                   </div>
                   <div>
                     <Label className="form-label text-xs">e. Cost of Services (Water, Elec.)</Label>
                     <CurrencyInput
-                      value={cost.services_cost || 0}
-                      onChange={(val) => handleChange("services_cost", val)}
+                      value={actualSiteExpenditure.services_cost || 0}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
                     />
                   </div>
                   <div>
                     <Label className="form-label text-xs">f. Machineries & Equipment</Label>
                     <CurrencyInput
-                      value={cost.equipment_cost || 0}
-                      onChange={(val) => handleChange("equipment_cost", val)}
+                      value={actualSiteExpenditure.machinery_cost || 0}
+                      onChange={() => {}}
+                      disabled
+                      className="bg-emerald-50 border-emerald-200"
                     />
                   </div>
                 </div>
                 <div className="pl-4 mt-3 pt-2 border-t border-dashed">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-slate-600">Sub-total (On Site Expenditure)</span>
-                    <span className="font-semibold text-emerald-700">{formatCurrency(
-                      (cost.site_development_cost || 0) + 
-                      (cost.salaries || 0) + 
-                      (cost.consultants_fee || 0) + 
-                      (cost.site_overheads || 0) + 
-                      (cost.services_cost || 0) + 
-                      (cost.equipment_cost || 0)
-                    )}</span>
+                    <span className="font-semibold text-emerald-700">{formatCurrency(actualSiteExpenditure.total || 0)}</span>
                   </div>
                 </div>
               </div>

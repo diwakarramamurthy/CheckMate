@@ -1156,31 +1156,57 @@ async def get_estimated_development_cost(project_id: str, current_user: dict = D
     infra_cost = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
     infrastructure_cost = infra_cost.get("total_infrastructure_cost", 0) if infra_cost else 0
     
+    # Get site expenditure (estimated)
+    site_exp = await db.site_expenditure.find_one({"project_id": project_id}, {"_id": 0})
+    site_expenditure = site_exp if site_exp else {
+        "site_development_cost": 0,
+        "salaries": 0,
+        "consultants_fee": 0,
+        "site_overheads": 0,
+        "services_cost": 0,
+        "machinery_cost": 0
+    }
+    
+    # Calculate total
+    site_exp_total = (
+        site_expenditure.get("site_development_cost", 0) +
+        site_expenditure.get("salaries", 0) +
+        site_expenditure.get("consultants_fee", 0) +
+        site_expenditure.get("site_overheads", 0) +
+        site_expenditure.get("services_cost", 0) +
+        site_expenditure.get("machinery_cost", 0)
+    )
+    
     if not estimate:
         return {
             "project_id": project_id,
             "buildings_cost": buildings_cost,
             "infrastructure_cost": infrastructure_cost,
-            "site_development_cost": 0,
-            "salaries": 0,
-            "consultants_fee": 0,
-            "site_overheads": 0,
-            "services_cost": 0,
-            "machinery_cost": 0,
+            "site_development_cost": site_expenditure.get("site_development_cost", 0),
+            "salaries": site_expenditure.get("salaries", 0),
+            "consultants_fee": site_expenditure.get("consultants_fee", 0),
+            "site_overheads": site_expenditure.get("site_overheads", 0),
+            "services_cost": site_expenditure.get("services_cost", 0),
+            "machinery_cost": site_expenditure.get("machinery_cost", 0),
+            "site_expenditure_total": site_exp_total,
             "taxes_premiums_fees": 0,
             "finance_cost": 0,
-            "total_estimated_development_cost": buildings_cost + infrastructure_cost,
+            "total_estimated_development_cost": buildings_cost + infrastructure_cost + site_exp_total,
             "is_draft": True
         }
     
-    # Update with latest auto-calculated values
+    # Update with latest auto-calculated values from other sections
     estimate["buildings_cost"] = buildings_cost
     estimate["infrastructure_cost"] = infrastructure_cost
+    estimate["site_development_cost"] = site_expenditure.get("site_development_cost", 0)
+    estimate["salaries"] = site_expenditure.get("salaries", 0)
+    estimate["consultants_fee"] = site_expenditure.get("consultants_fee", 0)
+    estimate["site_overheads"] = site_expenditure.get("site_overheads", 0)
+    estimate["services_cost"] = site_expenditure.get("services_cost", 0)
+    estimate["machinery_cost"] = site_expenditure.get("machinery_cost", 0)
+    estimate["site_expenditure_total"] = site_exp_total
     estimate["total_estimated_development_cost"] = (
-        buildings_cost + infrastructure_cost + 
-        estimate.get("site_development_cost", 0) + estimate.get("salaries", 0) +
-        estimate.get("consultants_fee", 0) + estimate.get("site_overheads", 0) +
-        estimate.get("services_cost", 0) + estimate.get("machinery_cost", 0) +
+        buildings_cost + infrastructure_cost + site_exp_total +
         estimate.get("taxes_premiums_fees", 0) + estimate.get("finance_cost", 0)
     )
     
@@ -1199,6 +1225,142 @@ async def refresh_buildings_cost(project_id: str, current_user: dict = Depends(g
         "buildings_cost": buildings_cost,
         "infrastructure_cost": infrastructure_cost
     }
+
+# =========================
+# SITE EXPENDITURE ROUTES (Estimated)
+# =========================
+
+@api_router.get("/site-expenditure/{project_id}")
+async def get_site_expenditure(project_id: str, current_user: dict = Depends(get_current_user)):
+    """Get estimated on-site expenditure for a project"""
+    expenditure = await db.site_expenditure.find_one({"project_id": project_id}, {"_id": 0})
+    if not expenditure:
+        return {
+            "project_id": project_id,
+            "site_development_cost": 0,
+            "salaries": 0,
+            "consultants_fee": 0,
+            "site_overheads": 0,
+            "services_cost": 0,
+            "machinery_cost": 0,
+            "total": 0
+        }
+    return expenditure
+
+@api_router.post("/site-expenditure")
+async def save_site_expenditure(
+    project_id: str = Query(...),
+    request: Request = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save estimated on-site expenditure for a project"""
+    data = await request.json()
+    
+    site_development_cost = data.get("site_development_cost", 0)
+    salaries = data.get("salaries", 0)
+    consultants_fee = data.get("consultants_fee", 0)
+    site_overheads = data.get("site_overheads", 0)
+    services_cost = data.get("services_cost", 0)
+    machinery_cost = data.get("machinery_cost", 0)
+    
+    total = site_development_cost + salaries + consultants_fee + site_overheads + services_cost + machinery_cost
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    expenditure_doc = {
+        "project_id": project_id,
+        "site_development_cost": site_development_cost,
+        "salaries": salaries,
+        "consultants_fee": consultants_fee,
+        "site_overheads": site_overheads,
+        "services_cost": services_cost,
+        "machinery_cost": machinery_cost,
+        "total": total,
+        "updated_at": now
+    }
+    
+    await db.site_expenditure.update_one(
+        {"project_id": project_id},
+        {"$set": expenditure_doc},
+        upsert=True
+    )
+    
+    return expenditure_doc
+
+# =========================
+# ACTUAL SITE EXPENDITURE ROUTES (per quarter)
+# =========================
+
+@api_router.get("/actual-site-expenditure/{project_id}")
+async def get_actual_site_expenditure(
+    project_id: str, 
+    quarter: str = Query(...),
+    year: int = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get actual on-site expenditure for a project for a specific quarter"""
+    expenditure = await db.actual_site_expenditure.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, 
+        {"_id": 0}
+    )
+    if not expenditure:
+        return {
+            "project_id": project_id,
+            "quarter": quarter,
+            "year": year,
+            "site_development_cost": 0,
+            "salaries": 0,
+            "consultants_fee": 0,
+            "site_overheads": 0,
+            "services_cost": 0,
+            "machinery_cost": 0,
+            "total": 0
+        }
+    return expenditure
+
+@api_router.post("/actual-site-expenditure")
+async def save_actual_site_expenditure(
+    project_id: str = Query(...),
+    quarter: str = Query(...),
+    year: int = Query(...),
+    request: Request = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save actual on-site expenditure for a project for a specific quarter"""
+    data = await request.json()
+    
+    site_development_cost = data.get("site_development_cost", 0)
+    salaries = data.get("salaries", 0)
+    consultants_fee = data.get("consultants_fee", 0)
+    site_overheads = data.get("site_overheads", 0)
+    services_cost = data.get("services_cost", 0)
+    machinery_cost = data.get("machinery_cost", 0)
+    
+    total = site_development_cost + salaries + consultants_fee + site_overheads + services_cost + machinery_cost
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    expenditure_doc = {
+        "project_id": project_id,
+        "quarter": quarter,
+        "year": year,
+        "site_development_cost": site_development_cost,
+        "salaries": salaries,
+        "consultants_fee": consultants_fee,
+        "site_overheads": site_overheads,
+        "services_cost": services_cost,
+        "machinery_cost": machinery_cost,
+        "total": total,
+        "updated_at": now
+    }
+    
+    await db.actual_site_expenditure.update_one(
+        {"project_id": project_id, "quarter": quarter, "year": year},
+        {"$set": expenditure_doc},
+        upsert=True
+    )
+    
+    return expenditure_doc
 
 # =========================
 # CONSTRUCTION PROGRESS ROUTES
@@ -2020,7 +2182,6 @@ async def import_sales_excel(
 ):
     """Import unit sales from Excel file - replaces all existing data for the project"""
     import openpyxl
-    from io import BytesIO
     
     contents = await file.read()
     wb = openpyxl.load_workbook(BytesIO(contents))

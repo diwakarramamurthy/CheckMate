@@ -1,0 +1,95 @@
+{
+  "summary": "On Site Expenditure Feature Testing Complete - All features implemented and working correctly. Backend (12/12 tests passed) and Frontend (all UI tests passed). Estimated costs entry on Buildings & Infrastructure page, Actual costs entry on Construction Progress page, and read-only display on Project Costs page all verified.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Backend: GET /api/site-expenditure/{project_id} returns 200",
+    "Backend: GET site-expenditure has correct fields (site_development_cost, salaries, etc.)",
+    "Backend: POST /api/site-expenditure creates/updates estimated costs",
+    "Backend: POST site-expenditure calculates total correctly",
+    "Backend: GET /api/actual-site-expenditure returns 200",
+    "Backend: GET actual-site-expenditure requires quarter and year params (422 validation)",
+    "Backend: POST /api/actual-site-expenditure creates quarterly actual costs",
+    "Backend: POST actual-site-expenditure calculates total correctly",
+    "Backend: Actual expenditure data persists separately per quarter",
+    "Backend: Estimated development cost includes site expenditure data",
+    "Backend: Returns default values for non-existent project",
+    "Backend: Zero values handled correctly",
+    "Frontend: Buildings & Infrastructure page has 'On Site Expenditure' tab",
+    "Frontend: Estimated expenditure form found with all 6 cost fields",
+    "Frontend: Construction Progress page has 'Actual Site Expenditure' tab",
+    "Frontend: Actual expenditure form shows quarter-specific costs",
+    "Frontend: Save Site Expenditure button works",
+    "Frontend: Project Costs page shows 'Auto-populated' badge",
+    "Frontend: Project Costs page shows 'Data entered in Construction Progress page' message",
+    "Frontend: Project Costs page has read-only inputs for actual site expenditure",
+    "Frontend: Data flows correctly from Construction Progress to Project Costs page"
+  ],
+  
+  "test_report_links": [
+    "/app/backend/tests/test_site_expenditure.py",
+    "/app/test_reports/pytest/pytest_site_expenditure.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_site_expenditure.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (All UI components verified)"
+  },
+  
+  "test_credentials": {
+    "email": "test@example.com",
+    "password": "test123"
+  },
+  
+  "seed_data_creation": "Test data created for actual-site-expenditure with test values for Q1-Q4 2025 and 2026",
+  
+  "retest_needed": false,
+  
+  "should_main_agent_self_test": false,
+  
+  "context_for_next_testing_agent": "On Site Expenditure feature fully tested. Three pages involved: 1) Buildings & Infrastructure page for estimated costs (tab: 'On Site Expenditure'), 2) Construction Progress page for actual costs (tab: 'Actual Site Expenditure'), 3) Project Costs page displays both estimated (editable) and actual (read-only with 'Auto-populated' badge). Backend endpoints: /api/site-expenditure for estimated, /api/actual-site-expenditure for actual per quarter.",
+  
+  "features_verified": {
+    "estimated_site_expenditure": {
+      "page": "Buildings & Infrastructure",
+      "tab": "On Site Expenditure",
+      "endpoint": "POST/GET /api/site-expenditure",
+      "status": "PASS",
+      "details": "Estimated costs form with 6 fields (Development Cost, Salaries, Consultants Fee, Site Over-heads, Services Cost, Machinery Cost). Shows total and saves correctly."
+    },
+    "actual_site_expenditure": {
+      "page": "Construction Progress",
+      "tab": "Actual Site Expenditure",
+      "endpoint": "POST/GET /api/actual-site-expenditure",
+      "status": "PASS",
+      "details": "Actual costs form per quarter with same 6 fields. Requires quarter and year params. Shows quarterly total and saves correctly."
+    },
+    "project_costs_readonly": {
+      "page": "Project Costs",
+      "status": "PASS",
+      "details": "Shows 'On Site Expenditure for Development' section in Actual Development Cost column with 'Auto-populated' badge, 'Data entered in Construction Progress page' message, and read-only inputs displaying actual costs."
+    },
+    "data_flow": {
+      "status": "PASS",
+      "details": "Data flows correctly: Buildings page estimated costs → Project Costs estimated column, Construction Progress actual costs → Project Costs actual column (read-only)"
+    }
+  }
+}
