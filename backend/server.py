@@ -2851,10 +2851,15 @@ async def health_check():
 app.include_router(api_router)
 
 # CORS
+_cors_origins_env = os.environ.get('CORS_ORIGINS', '')
+_cors_origins = [o.strip() for o in _cors_origins_env.split(',') if o.strip()] or [
+    'https://checkmate-frontend-ei62.onrender.com',
+    'http://localhost:3000',
+]
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
