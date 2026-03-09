@@ -2783,6 +2783,148 @@ async def generate_pdf_report(
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 
+# =========================
+# EXCEL GENERATION ENDPOINT
+# =========================
+
+@api_router.get("/generate-excel/{project_id}/{report_type}")
+async def generate_excel_report(
+    project_id: str,
+    report_type: str,
+    quarter: str = Query(...),
+    year: int = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate RERA report as downloadable Excel (.xlsx)"""
+    from excel_generator import (
+        generate_form1_excel,
+        generate_form3_excel,
+        generate_form4_excel,
+        generate_annexure_a_excel,
+    )
+
+    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
+    construction_progress = await db.construction_progress.find(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    ).to_list(1000)
+    infrastructure_progress = await db.infrastructure_progress.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    )
+    project_cost = await db.project_costs.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    )
+    building_costs = await db.building_costs.find(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    ).to_list(1000)
+    estimated_dev_cost = await db.estimated_development_costs.find_one(
+        {"project_id": project_id}, {"_id": 0}
+    )
+    sales = await db.unit_sales.find({"project_id": project_id}, {"_id": 0}).to_list(10000)
+
+    try:
+        if report_type == "form-1":
+            buf = generate_form1_excel(project, buildings, construction_progress, infrastructure_progress, quarter, year)
+            filename = f"Form1_Construction_Progress_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
+        elif report_type == "form-3":
+            buf = generate_form3_excel(project, buildings, building_costs, estimated_dev_cost, quarter, year)
+            filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
+        elif report_type == "form-4":
+            buf = generate_form4_excel(project, project_cost, estimated_dev_cost, quarter, year)
+            filename = f"Form4_Project_Cost_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
+        elif report_type == "annexure-a":
+            buf = generate_annexure_a_excel(project, sales, buildings, quarter, year)
+            filename = f"AnnexureA_Sales_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
+        else:
+            raise HTTPException(status_code=400, detail=f"Excel generation not available for {report_type}.")
+
+        filename = filename.replace(" ", "_").replace("/", "-")
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Excel generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate Excel: {str(e)}")
+
+
+# =========================
+# WORD GENERATION ENDPOINT
+# =========================
+
+@api_router.get("/generate-docx/{project_id}/{report_type}")
+async def generate_docx_report(
+    project_id: str,
+    report_type: str,
+    quarter: str = Query(...),
+    year: int = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate RERA report as downloadable Word document (.docx)"""
+    from docx_generator import (
+        generate_form1_docx,
+        generate_form3_docx,
+        generate_form4_docx,
+        generate_annexure_a_docx,
+    )
+
+    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
+    construction_progress = await db.construction_progress.find(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    ).to_list(1000)
+    infrastructure_progress = await db.infrastructure_progress.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    )
+    project_cost = await db.project_costs.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    )
+    building_costs = await db.building_costs.find(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    ).to_list(1000)
+    estimated_dev_cost = await db.estimated_development_costs.find_one(
+        {"project_id": project_id}, {"_id": 0}
+    )
+    sales = await db.unit_sales.find({"project_id": project_id}, {"_id": 0}).to_list(10000)
+
+    try:
+        if report_type == "form-1":
+            buf = generate_form1_docx(project, buildings, construction_progress, infrastructure_progress, quarter, year)
+            filename = f"Form1_Construction_Progress_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
+        elif report_type == "form-3":
+            buf = generate_form3_docx(project, buildings, building_costs, estimated_dev_cost, quarter, year)
+            filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
+        elif report_type == "form-4":
+            buf = generate_form4_docx(project, project_cost, estimated_dev_cost, quarter, year)
+            filename = f"Form4_Project_Cost_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
+        elif report_type == "annexure-a":
+            buf = generate_annexure_a_docx(project, sales, buildings, quarter, year)
+            filename = f"AnnexureA_Sales_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
+        else:
+            raise HTTPException(status_code=400, detail=f"Word generation not available for {report_type}.")
+
+        filename = filename.replace(" ", "_").replace("/", "-")
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Word generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate Word doc: {str(e)}")
+
+
 def flatten_dict(d, parent_key='', sep='.'):
     """Flatten nested dict"""
     items = []

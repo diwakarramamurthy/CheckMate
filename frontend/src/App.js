@@ -4402,7 +4402,13 @@ const ReportsPage = () => {
   const [templates, setTemplates] = useState([]);
   const [generating, setGenerating] = useState("");
   const [downloading, setDownloading] = useState("");
+  const [downloadingExcel, setDownloadingExcel] = useState("");
+  const [downloadingDocx, setDownloadingDocx] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
+  const [previewPdfUrl, setPreviewPdfUrl] = useState("");
+  const [previewType, setPreviewType] = useState("html"); // "html" | "pdf"
+  const [previewTitle, setPreviewTitle] = useState("Report Preview");
+  const [previewReportType, setPreviewReportType] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
 
   // Reports with PDF support marked
@@ -4438,18 +4444,37 @@ const ReportsPage = () => {
       return;
     }
     setGenerating(reportType);
+    const report = reportTypes.find(r => r.type === reportType);
+    const title = report?.name || "Report Preview";
+
     try {
-      const res = await axios.get(`${API}/generate-report/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`);
-      if (res.data.html) {
-        setPreviewHtml(res.data.html);
+      if (report?.hasPdf) {
+        // For PDF-supported reports: fetch the actual PDF and show it in an iframe
+        // so the preview is an exact match to what downloads
+        toast.info("Loading preview…");
+        const response = await axios.get(
+          `${API}/generate-pdf/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`,
+          { responseType: "blob" }
+        );
+        // Revoke any previous blob URL to avoid memory leaks
+        if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+        const blobUrl = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+        setPreviewPdfUrl(blobUrl);
+        setPreviewType("pdf");
       } else {
-        // Generate HTML from data
-        const html = generateHtmlFromData(reportType, res.data.data);
+        // For non-PDF reports: use the HTML data endpoint
+        const res = await axios.get(
+          `${API}/generate-report/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`
+        );
+        const html = res.data.html || generateHtmlFromData(reportType, res.data.data);
         setPreviewHtml(html);
+        setPreviewType("html");
       }
+      setPreviewTitle(title);
+      setPreviewReportType(reportType);
       setPreviewOpen(true);
     } catch (err) {
-      toast.error("Failed to generate report");
+      toast.error("Failed to generate report preview");
     } finally {
       setGenerating("");
     }
@@ -4561,16 +4586,12 @@ const ReportsPage = () => {
         `${API}/generate-pdf/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`,
         { responseType: 'blob' }
       );
-      
-      // Get filename from header or generate one
       const contentDisposition = response.headers['content-disposition'];
       let filename = `${reportType}_report.pdf`;
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename=(.+)/);
-        if (filenameMatch) filename = filenameMatch[1].replace(/"/g, '');
+        const m = contentDisposition.match(/filename=(.+)/);
+        if (m) filename = m[1].replace(/"/g, '');
       }
-      
-      // Use file-saver for reliable download
       saveAs(response.data, filename);
       toast.success("PDF downloaded successfully!");
     } catch (err) {
@@ -4578,6 +4599,62 @@ const ReportsPage = () => {
       toast.error(errorMsg);
     } finally {
       setDownloading("");
+    }
+  };
+
+  const downloadExcel = async (reportType) => {
+    if (!selectedProject) {
+      toast.error("Please select a project");
+      return;
+    }
+    setDownloadingExcel(reportType);
+    try {
+      toast.info("Generating Excel...");
+      const response = await axios.get(
+        `${API}/generate-excel/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`,
+        { responseType: 'blob' }
+      );
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `${reportType}_report.xlsx`;
+      if (contentDisposition) {
+        const m = contentDisposition.match(/filename=(.+)/);
+        if (m) filename = m[1].replace(/"/g, '');
+      }
+      saveAs(response.data, filename);
+      toast.success("Excel downloaded successfully!");
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || "Failed to generate Excel";
+      toast.error(errorMsg);
+    } finally {
+      setDownloadingExcel("");
+    }
+  };
+
+  const downloadDocx = async (reportType) => {
+    if (!selectedProject) {
+      toast.error("Please select a project");
+      return;
+    }
+    setDownloadingDocx(reportType);
+    try {
+      toast.info("Generating Word document...");
+      const response = await axios.get(
+        `${API}/generate-docx/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`,
+        { responseType: 'blob' }
+      );
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `${reportType}_report.docx`;
+      if (contentDisposition) {
+        const m = contentDisposition.match(/filename=(.+)/);
+        if (m) filename = m[1].replace(/"/g, '');
+      }
+      saveAs(response.data, filename);
+      toast.success("Word document downloaded successfully!");
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || "Failed to generate Word document";
+      toast.error(errorMsg);
+    } finally {
+      setDownloadingDocx("");
     }
   };
 
@@ -4637,93 +4714,120 @@ const ReportsPage = () => {
                     <CardTitle className="text-base">{report.name}</CardTitle>
                     <CardDescription>{report.description}</CardDescription>
                   </div>
-                  {report.hasPdf && (
-                    <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">
-                      PDF Ready
-                    </Badge>
-                  )}
+                  <Badge variant="secondary" className="capitalize shrink-0 ml-2">{report.role}</Badge>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="secondary" className="capitalize">{report.role}</Badge>
-                  </div>
-                  <div className="flex gap-2">
+              <CardContent className="space-y-2">
+                {/* Row 1: Preview + Download PDF */}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => generateReport(report.type)}
+                    disabled={generating === report.type}
+                    className="flex-1"
+                    data-testid={`preview-${report.type}`}
+                  >
+                    {generating === report.type ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <><Eye className="h-4 w-4 mr-1" />Preview</>
+                    )}
+                  </Button>
+                  {report.hasPdf ? (
                     <Button
                       size="sm"
-                      variant="outline"
+                      onClick={() => downloadPdf(report.type)}
+                      disabled={downloading === report.type}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                      data-testid={`download-${report.type}`}
+                    >
+                      {downloading === report.type ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <><Download className="h-4 w-4 mr-1" />PDF</>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
                       onClick={() => generateReport(report.type)}
                       disabled={generating === report.type}
-                      className="flex-1"
-                      data-testid={`preview-${report.type}`}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                      data-testid={`generate-${report.type}`}
                     >
                       {generating === report.type ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <>
-                          <Eye className="h-4 w-4 mr-1" />
-                          Preview
-                        </>
+                        <><FileText className="h-4 w-4 mr-1" />Generate</>
                       )}
                     </Button>
-                    {report.hasPdf ? (
-                      <Button
-                        size="sm"
-                        onClick={() => downloadPdf(report.type)}
-                        disabled={downloading === report.type}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700"
-                        data-testid={`download-${report.type}`}
-                      >
-                        {downloading === report.type ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Download className="h-4 w-4 mr-1" />
-                            Download PDF
-                          </>
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => generateReport(report.type)}
-                        disabled={generating === report.type}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700"
-                        data-testid={`generate-${report.type}`}
-                      >
-                        {generating === report.type ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <FileText className="h-4 w-4 mr-1" />
-                            Generate
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
+                {/* Row 2: Excel + Word (only for PDF-ready reports) */}
+                {report.hasPdf && (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadExcel(report.type)}
+                      disabled={downloadingExcel === report.type}
+                      className="flex-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                      data-testid={`download-excel-${report.type}`}
+                    >
+                      {downloadingExcel === report.type ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <><Download className="h-4 w-4 mr-1" />Excel</>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadDocx(report.type)}
+                      disabled={downloadingDocx === report.type}
+                      className="flex-1 text-violet-700 border-violet-300 hover:bg-violet-50"
+                      data-testid={`download-docx-${report.type}`}
+                    >
+                      {downloadingDocx === report.type ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <><Download className="h-4 w-4 mr-1" />Word</>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
 
         {/* Preview Dialog */}
-        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh]">
+        <Dialog open={previewOpen} onOpenChange={(open) => { if (!open && previewPdfUrl) { URL.revokeObjectURL(previewPdfUrl); setPreviewPdfUrl(null); } setPreviewOpen(open); }}>
+          <DialogContent className="max-w-5xl max-h-[95vh]">
             <DialogHeader>
-              <DialogTitle>Report Preview</DialogTitle>
+              <DialogTitle>{previewTitle || 'Report Preview'}</DialogTitle>
             </DialogHeader>
-            <ScrollArea className="h-[60vh] border rounded-lg">
-              <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-            </ScrollArea>
+            {previewType === 'pdf' ? (
+              <iframe
+                src={previewPdfUrl}
+                className="w-full border rounded-lg"
+                style={{ height: '70vh' }}
+                title="PDF Preview"
+              />
+            ) : (
+              <ScrollArea className="h-[65vh] border rounded-lg">
+                <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              </ScrollArea>
+            )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
-              <Button onClick={printReport} className="bg-blue-600 hover:bg-blue-700">
-                <Download className="h-4 w-4 mr-2" />
-                Print / Download PDF
-              </Button>
+              {previewType === 'html' && (
+                <Button onClick={printReport} className="bg-blue-600 hover:bg-blue-700">
+                  <Download className="h-4 w-4 mr-2" />
+                  Print / Download PDF
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
