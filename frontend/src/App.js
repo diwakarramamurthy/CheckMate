@@ -2614,9 +2614,9 @@ const ConstructionProgressPage = () => {
   const initializeActivities = (tmpl) => {
     const towerData = {};
     tmpl.tower_construction.categories.forEach(cat => {
-      towerData[cat.id] = {};
+      towerData[cat.id] = { _use_cost_weightage: false };
       cat.activities.forEach(act => {
-        towerData[cat.id][act.id] = { completion: 0, is_applicable: true };
+        towerData[cat.id][act.id] = { completion: 0, is_applicable: true, cost: 0 };
       });
     });
     setTowerActivities(towerData);
@@ -2661,26 +2661,55 @@ const ConstructionProgressPage = () => {
 
   const calculateCompletions = () => {
     if (!template) return;
-    
+
     // Calculate tower completion
     let totalApplicable = 0;
     let weightedCompletion = 0;
     const catComps = {};
 
     template.tower_construction.categories.forEach(cat => {
+      const catData = towerActivities[cat.id] || {};
+      const useCostWeightage = catData._use_cost_weightage || false;
       let catApplicable = 0;
       let catWeighted = 0;
-      
-      cat.activities.forEach(act => {
-        const actData = towerActivities[cat.id]?.[act.id] || { completion: 0, is_applicable: true };
-        if (actData.is_applicable) {
-          totalApplicable += act.weightage;
-          catApplicable += act.weightage;
-          weightedCompletion += act.weightage * (actData.completion || 0) / 100;
-          catWeighted += act.weightage * (actData.completion || 0) / 100;
-        }
-      });
-      
+
+      if (useCostWeightage) {
+        // Cost-based mode: derive effective weightage from cost inputs
+        const totalCost = cat.activities.reduce((sum, act) => {
+          const actData = catData[act.id] || {};
+          return actData.is_applicable !== false ? sum + (parseFloat(actData.cost) || 0) : sum;
+        }, 0);
+        const catBaseApplicable = cat.activities.reduce((sum, act) => {
+          const actData = catData[act.id] || {};
+          return actData.is_applicable !== false ? sum + act.weightage : sum;
+        }, 0);
+
+        cat.activities.forEach(act => {
+          const actData = catData[act.id] || { completion: 0, is_applicable: true };
+          if (actData.is_applicable !== false) {
+            const cost = parseFloat(actData.cost) || 0;
+            const effectiveWt = totalCost > 0
+              ? (cost / totalCost) * catBaseApplicable
+              : act.weightage;
+            totalApplicable += effectiveWt;
+            catApplicable += effectiveWt;
+            weightedCompletion += effectiveWt * (actData.completion || 0) / 100;
+            catWeighted += effectiveWt * (actData.completion || 0) / 100;
+          }
+        });
+      } else {
+        // Standard template-weightage mode
+        cat.activities.forEach(act => {
+          const actData = catData[act.id] || { completion: 0, is_applicable: true };
+          if (actData.is_applicable !== false) {
+            totalApplicable += act.weightage;
+            catApplicable += act.weightage;
+            weightedCompletion += act.weightage * (actData.completion || 0) / 100;
+            catWeighted += act.weightage * (actData.completion || 0) / 100;
+          }
+        });
+      }
+
       catComps[cat.id] = catApplicable > 0 ? (catWeighted / catApplicable * 100) : 0;
     });
 
@@ -2725,6 +2754,16 @@ const ConstructionProgressPage = () => {
 
   const toggleCategory = (categoryId) => {
     setExpandedCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
+  };
+
+  const handleCostModeToggle = (categoryId) => {
+    setTowerActivities(prev => ({
+      ...prev,
+      [categoryId]: {
+        ...prev[categoryId],
+        _use_cost_weightage: !prev[categoryId]?._use_cost_weightage
+      }
+    }));
   };
 
   const handleSave = async () => {
@@ -2877,27 +2916,73 @@ const ConstructionProgressPage = () => {
             {template.tower_construction.categories.map((category, catIdx) => {
               const catCompletion = categoryCompletions[category.id] || 0;
               const isExpanded = expandedCategories[category.id] !== false;
-              
+              const catData = towerActivities[category.id] || {};
+              const useCostWeightage = catData._use_cost_weightage || false;
+
+              // Compute total cost for applicable activities in this category (for rollup display)
+              const totalCategoryCost = category.activities.reduce((sum, act) => {
+                const actData = catData[act.id] || {};
+                return actData.is_applicable !== false ? sum + (parseFloat(actData.cost) || 0) : sum;
+              }, 0);
+
+              // Pre-compute effective weightages for cost-mode display
+              const catBaseApplicable = category.activities.reduce((sum, act) => {
+                const actData = catData[act.id] || {};
+                return actData.is_applicable !== false ? sum + act.weightage : sum;
+              }, 0);
+
               return (
                 <Card key={category.id} className="overflow-hidden">
-                  <div 
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                    onClick={() => toggleCategory(category.id)}
-                  >
-                    <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
+                    <div
+                      className="flex items-center gap-4 flex-1 cursor-pointer"
+                      onClick={() => toggleCategory(category.id)}
+                    >
                       <div className="flex items-center gap-2">
                         {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                         <span className="text-sm font-medium text-slate-500">{String.fromCharCode(97 + catIdx)})</span>
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900">{category.name}</h3>
-                        <p className="text-sm text-slate-500">Base Weightage: {category.total_weightage}%</p>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <p className="text-sm text-slate-500">Base Weightage: {category.total_weightage}%</p>
+                          {useCostWeightage && totalCategoryCost > 0 && (
+                            <p className="text-sm text-emerald-600 font-medium">
+                              Total Cost: ₹{totalCategoryCost.toLocaleString('en-IN')}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
+                      {/* Cost-Based Weightage Toggle */}
+                      <div
+                        className="flex items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <label className="text-xs text-slate-500 whitespace-nowrap cursor-pointer select-none" htmlFor={`cost-toggle-${category.id}`}>
+                          Cost Wt.
+                        </label>
+                        <button
+                          id={`cost-toggle-${category.id}`}
+                          role="switch"
+                          aria-checked={useCostWeightage}
+                          onClick={() => handleCostModeToggle(category.id)}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
+                            useCostWeightage ? 'bg-emerald-500' : 'bg-slate-300'
+                          }`}
+                          title={useCostWeightage ? 'Using cost-based weightage (click to switch to manual)' : 'Using manual weightage (click to switch to cost-based)'}
+                        >
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                              useCostWeightage ? 'translate-x-4' : 'translate-x-0.5'
+                            }`}
+                          />
+                        </button>
+                      </div>
                       <div className="w-32">
                         <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className={`h-full ${getCompletionColor(catCompletion)} transition-all`}
                             style={{ width: `${catCompletion}%` }}
                           />
@@ -2908,14 +2993,21 @@ const ConstructionProgressPage = () => {
                       </Badge>
                     </div>
                   </div>
-                  
+
                   {isExpanded && (
                     <CardContent className="pt-0 pb-4">
+                      {useCostWeightage && (
+                        <div className="mb-2 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700 flex items-center gap-1.5">
+                          <span className="font-medium">Cost-Based Weightage ON</span>
+                          <span className="text-emerald-600">— Wt.% is auto-calculated from cost. Enter costs below.</span>
+                        </div>
+                      )}
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-slate-50">
                             <TableHead className="w-8">N/A</TableHead>
                             <TableHead>Activity</TableHead>
+                            <TableHead className="text-right w-28">Cost (₹)</TableHead>
                             <TableHead className="text-center w-20">Wt. %</TableHead>
                             <TableHead className="text-center w-32">Completion %</TableHead>
                             <TableHead className="text-center w-24">Weighted</TableHead>
@@ -2923,9 +3015,18 @@ const ConstructionProgressPage = () => {
                         </TableHeader>
                         <TableBody>
                           {category.activities.map((activity, actIdx) => {
-                            const actData = towerActivities[category.id]?.[activity.id] || { completion: 0, is_applicable: true };
-                            const isNA = !actData.is_applicable;
-                            
+                            const actData = catData[activity.id] || { completion: 0, is_applicable: true, cost: 0 };
+                            const isNA = actData.is_applicable === false;
+                            const cost = parseFloat(actData.cost) || 0;
+
+                            // Compute effective weightage for display
+                            let displayWt = activity.weightage;
+                            if (useCostWeightage && !isNA) {
+                              displayWt = totalCategoryCost > 0
+                                ? (cost / totalCategoryCost) * catBaseApplicable
+                                : activity.weightage;
+                            }
+
                             return (
                               <TableRow key={activity.id} className={isNA ? "bg-slate-100 opacity-60" : ""}>
                                 <TableCell>
@@ -2941,7 +3042,30 @@ const ConstructionProgressPage = () => {
                                   <span className="text-slate-500 mr-2">{actIdx + 1}.</span>
                                   {activity.name}
                                 </TableCell>
-                                <TableCell className="text-center text-sm">{activity.weightage}%</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span className="text-xs text-slate-400">₹</span>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="1000"
+                                      value={actData.cost || ""}
+                                      placeholder="0"
+                                      onChange={(e) => handleActivityChange(category.id, activity.id, 'cost', parseFloat(e.target.value) || 0)}
+                                      disabled={isNA}
+                                      className="w-24 text-right text-sm h-8"
+                                    />
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center text-sm">
+                                  {useCostWeightage && !isNA ? (
+                                    <span className={`font-medium ${totalCategoryCost > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                                      {formatNumber(displayWt, 2)}%
+                                    </span>
+                                  ) : (
+                                    <span>{activity.weightage}%</span>
+                                  )}
+                                </TableCell>
                                 <TableCell>
                                   <Input
                                     type="number"
@@ -2955,11 +3079,27 @@ const ConstructionProgressPage = () => {
                                   />
                                 </TableCell>
                                 <TableCell className="text-center font-medium text-sm">
-                                  {isNA ? "-" : formatNumber(activity.weightage * (actData.completion || 0) / 100, 2) + "%"}
+                                  {isNA ? "-" : formatNumber(displayWt * (actData.completion || 0) / 100, 2) + "%"}
                                 </TableCell>
                               </TableRow>
                             );
                           })}
+                          {/* Category cost total row */}
+                          {useCostWeightage && (
+                            <TableRow className="bg-emerald-50 border-t-2 border-emerald-200">
+                              <TableCell colSpan={2} className="text-sm font-semibold text-emerald-800">
+                                Total (applicable activities)
+                              </TableCell>
+                              <TableCell className="text-right text-sm font-bold text-emerald-800">
+                                ₹{totalCategoryCost.toLocaleString('en-IN')}
+                              </TableCell>
+                              <TableCell className="text-center text-sm font-semibold text-emerald-700">
+                                {totalCategoryCost > 0 ? "100%" : "—"}
+                              </TableCell>
+                              <TableCell />
+                              <TableCell />
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </CardContent>

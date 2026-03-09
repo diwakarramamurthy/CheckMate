@@ -1674,44 +1674,77 @@ async def get_detailed_construction_template():
 
 # Calculate recalibrated weightage after N/A items
 def calculate_recalibrated_completion(activities_data: dict, template_categories: list) -> tuple:
-    """Calculate completion with recalibrated weightages for N/A items"""
+    """Calculate completion with recalibrated weightages for N/A items.
+    Supports cost-based weightage mode per category (flag: _use_cost_weightage).
+    When cost mode is ON, each sub-activity's effective weightage = (cost / total_cost) * cat_base_applicable_wt.
+    """
     total_applicable_weightage = 0
     weighted_completion = 0
     category_completions = {}
-    
+
     for category in template_categories:
         cat_id = category["id"]
         cat_data = activities_data.get(cat_id, {})
         cat_applicable_weightage = 0
         cat_weighted_completion = 0
-        
-        for activity in category["activities"]:
-            act_id = activity["id"]
-            act_data = cat_data.get(act_id, {})
-            
-            # Check if activity is applicable (not N/A)
-            is_applicable = act_data.get("is_applicable", True)
-            if is_applicable:
-                base_weightage = activity["weightage"]
-                completion = act_data.get("completion", 0)
-                
-                total_applicable_weightage += base_weightage
-                cat_applicable_weightage += base_weightage
-                
-                weighted_completion += base_weightage * completion / 100
-                cat_weighted_completion += base_weightage * completion / 100
-        
+
+        use_cost_weightage = cat_data.get("_use_cost_weightage", False)
+
+        if use_cost_weightage:
+            # --- Cost-based weightage mode ---
+            # Sum cost and base-weightage for applicable activities only
+            total_cost = 0
+            cat_base_applicable = 0
+            for activity in category["activities"]:
+                act_id = activity["id"]
+                act_data = cat_data.get(act_id, {})
+                if act_data.get("is_applicable", True):
+                    total_cost += float(act_data.get("cost", 0) or 0)
+                    cat_base_applicable += activity["weightage"]
+
+            for activity in category["activities"]:
+                act_id = activity["id"]
+                act_data = cat_data.get(act_id, {})
+                is_applicable = act_data.get("is_applicable", True)
+                if is_applicable:
+                    completion = act_data.get("completion", 0)
+                    cost = float(act_data.get("cost", 0) or 0)
+                    # Effective weight = proportional to cost; if no costs yet, fall back to template
+                    if total_cost > 0:
+                        effective_wt = (cost / total_cost) * cat_base_applicable
+                    else:
+                        effective_wt = activity["weightage"]
+
+                    total_applicable_weightage += effective_wt
+                    cat_applicable_weightage += effective_wt
+                    weighted_completion += effective_wt * completion / 100
+                    cat_weighted_completion += effective_wt * completion / 100
+        else:
+            # --- Standard (template) weightage mode ---
+            for activity in category["activities"]:
+                act_id = activity["id"]
+                act_data = cat_data.get(act_id, {})
+                is_applicable = act_data.get("is_applicable", True)
+                if is_applicable:
+                    base_weightage = activity["weightage"]
+                    completion = act_data.get("completion", 0)
+
+                    total_applicable_weightage += base_weightage
+                    cat_applicable_weightage += base_weightage
+                    weighted_completion += base_weightage * completion / 100
+                    cat_weighted_completion += base_weightage * completion / 100
+
         # Calculate category completion percentage
         if cat_applicable_weightage > 0:
             category_completions[cat_id] = round(cat_weighted_completion / cat_applicable_weightage * 100, 2)
         else:
             category_completions[cat_id] = 0  # All N/A
-    
+
     # Calculate overall completion (recalibrated)
     overall_completion = 0
     if total_applicable_weightage > 0:
         overall_completion = weighted_completion / total_applicable_weightage * 100
-    
+
     return round(overall_completion, 2), total_applicable_weightage, category_completions
 
 # Save detailed construction progress with N/A support
