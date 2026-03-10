@@ -4803,7 +4803,7 @@ const ReportsPage = () => {
         </div>
 
         {/* Preview Dialog */}
-        <Dialog open={previewOpen} onOpenChange={(open) => { if (!open && previewPdfUrl) { URL.revokeObjectURL(previewPdfUrl); setPreviewPdfUrl(null); } setPreviewOpen(open); }}>
+        <Dialog open={previewOpen} onOpenChange={(open) => { if (!open && previewPdfUrl) { URL.revokeObjectURL(previewPdfUrl); setPreviewPdfUrl(""); } setPreviewOpen(open); }}>
           <DialogContent className="max-w-5xl max-h-[95vh]">
             <DialogHeader>
               <DialogTitle>{previewTitle || 'Report Preview'}</DialogTitle>
