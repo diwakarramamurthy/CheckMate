@@ -383,28 +383,29 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
     return buffer
 
 
-def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, quarter, year):
+def generate_form3_pdf(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year):
     """
     FORM-3: Engineer's Certificate - Cost Incurred for Development
+    Cost Incurred = (% Work Completed from Construction Progress) × (Estimated Cost per Building)
     Official Goa RERA Format as per Rule 5(1)(a)(ii)
     """
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch,
                            leftMargin=0.5*inch, rightMargin=0.5*inch)
     elements = []
-    
+
     # Header
     elements.append(Paragraph("The Goa Real Estate (Regulation and Development)", SMALL_STYLE))
     elements.append(Paragraph("(Registration of Real Estate Projects, Registration of Real Estate Agents,", SMALL_STYLE))
     elements.append(Paragraph("Rates of Interest and Disclosures on Website) Rules 2017", SMALL_STYLE))
     elements.append(Spacer(1, 12))
-    
+
     elements.append(Paragraph("<b>FORM 3</b>", TITLE_STYLE))
     elements.append(Paragraph("<i>(See Rule 5 (1) (a) (ii))</i>", RULE_STYLE))
     elements.append(Paragraph("<b>ENGINEER'S CERTIFICATE</b>", SUBTITLE_STYLE))
     elements.append(Paragraph("(Cost Incurred Statement for Development)", SMALL_STYLE))
     elements.append(Spacer(1, 15))
-    
+
     # To section
     to_text = f"""<b>To</b><br/>
     {project.get('promoter_name', '________________________')},<br/>
@@ -413,74 +414,78 @@ def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, q
     """
     elements.append(Paragraph(to_text, BODY_STYLE))
     elements.append(Spacer(1, 8))
-    
+
     # Date
     elements.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", RIGHT_STYLE))
     elements.append(Spacer(1, 10))
-    
+
     # Subject
-    subject_text = f"""<b>Subject:</b> Certificate of Cost Incurred for Development of the Project 
-    <b>{project.get('project_name', '________')}</b> situated at {project.get('village', '________')}, 
+    subject_text = f"""<b>Subject:</b> Certificate of Cost Incurred for Development of the Project
+    <b>{project.get('project_name', '________')}</b> situated at {project.get('village', '________')},
     {project.get('taluka', '________')}, {project.get('district', 'North Goa')}
     """
     elements.append(Paragraph(subject_text, BODY_STYLE))
     elements.append(Spacer(1, 8))
-    
+
     # Reference
     elements.append(Paragraph(f"<b>Ref: Goa RERA Registration Number:</b> {project.get('rera_number', '_________________________')}", BODY_STYLE))
     elements.append(Spacer(1, 10))
-    
+
     # Salutation
     elements.append(Paragraph("<b>Sir,</b>", BODY_STYLE))
     elements.append(Spacer(1, 8))
-    
+
     # Assignment statement
     engineer_name = project.get('engineer_name', '________________________')
-    assignment_text = f"""I/We <b>{engineer_name}</b> have undertaken assignment as Engineer for certifying 
-    Cost Incurred for Development of the Project <b>{project.get('project_name', '________')}</b> 
+    assignment_text = f"""I/We <b>{engineer_name}</b> have undertaken assignment as Engineer for certifying
+    Cost Incurred for Development of the Project <b>{project.get('project_name', '________')}</b>
     as registered vide number <b>{project.get('rera_number', '________')}</b> under GoaRERA.
     """
     elements.append(Paragraph(assignment_text, BODY_STYLE))
     elements.append(Spacer(1, 12))
-    
+
     # TABLE A - Building-wise Cost
+    # Cost Incurred = (overall_completion % from Construction Progress) × Estimated Cost
     elements.append(Paragraph("<b>TABLE A: Cost Incurred for Building Construction</b>", HEADER_STYLE))
     elements.append(Spacer(1, 8))
-    
-    # Get building costs
-    building_costs_lookup = {bc.get('building_id'): bc for bc in (building_costs or [])}
+
+    cp_lookup = {cp.get('building_id'): cp for cp in (construction_progress or [])}
     est_cost = estimated_dev_cost or {}
-    
+
     table_a_data = [
-        ["Sr.", "Building/Wing", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)"]
+        ["Sr.", "Building/Wing", "% Complete", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)"]
     ]
-    
+
     total_estimated = 0
     total_incurred = 0
-    
+
     for idx, building in enumerate(buildings or [], 1):
-        bc = building_costs_lookup.get(building.get('building_id'), {})
+        progress = cp_lookup.get(building.get('building_id'), {})
+        completion_pct = progress.get('overall_completion', 0)
         est = building.get('estimated_cost', 0)
-        incurred = bc.get('actual_cost', 0)
+        incurred = round((completion_pct / 100) * est)
         balance = est - incurred
-        
+
         total_estimated += est
         total_incurred += incurred
-        
+
         table_a_data.append([
             str(idx),
             building.get('building_name', ''),
+            f"{completion_pct:.1f}%",
             format_indian_number(est),
             format_indian_number(incurred),
             format_indian_number(balance)
         ])
-    
+
     table_a_data.append([
-        "", "TOTAL", format_indian_number(total_estimated), 
-        format_indian_number(total_incurred), format_indian_number(total_estimated - total_incurred)
+        "", "TOTAL", "",
+        format_indian_number(total_estimated),
+        format_indian_number(total_incurred),
+        format_indian_number(total_estimated - total_incurred)
     ])
-    
-    table_a = Table(table_a_data, colWidths=[0.5*inch, 1.5*inch, 1.5*inch, 1.5*inch, 1.3*inch])
+
+    table_a = Table(table_a_data, colWidths=[0.4*inch, 1.5*inch, 0.7*inch, 1.4*inch, 1.4*inch, 1.2*inch])
     table_a.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
         ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.95, 0.95, 0.95)),
@@ -488,7 +493,8 @@ def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, q
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 8),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
@@ -496,13 +502,17 @@ def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, q
     ]))
     elements.append(table_a)
     elements.append(Spacer(1, 15))
-    
+
     # TABLE B - Development Works Cost
+    # Infra Cost Incurred = (overall_completion % from Infrastructure Progress) × Estimated Infra Cost
     elements.append(Paragraph("<b>TABLE B: Cost of Internal/External Development Works</b>", HEADER_STYLE))
     elements.append(Spacer(1, 8))
-    
+
     infra_cost = est_cost.get('infrastructure_cost', 0)
-    
+    infra_completion = (infrastructure_progress or {}).get('overall_completion', 0)
+    infra_incurred = round((infra_completion / 100) * infra_cost)
+    infra_balance = infra_cost - infra_incurred
+
     table_b_data = [
         ["Sr.", "Development Work", "Estimated (₹)", "Incurred (₹)", "Balance (₹)"],
         ["1", "Internal Roads & Footpaths", "-", "-", "-"],
@@ -515,9 +525,12 @@ def generate_form3_pdf(project, buildings, building_costs, estimated_dev_cost, q
         ["8", "Swimming Pool", "-", "-", "-"],
         ["9", "Electrical Infrastructure", "-", "-", "-"],
         ["10", "Boundary Wall & Gate", "-", "-", "-"],
-        ["", "TOTAL INFRASTRUCTURE", format_indian_number(infra_cost), "-", "-"],
+        ["", "TOTAL INFRASTRUCTURE",
+         format_indian_number(infra_cost),
+         format_indian_number(infra_incurred),
+         format_indian_number(infra_balance)],
     ]
-    
+
     table_b = Table(table_b_data, colWidths=[0.5*inch, 2.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
     table_b.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
@@ -622,20 +635,38 @@ def generate_form4_pdf(project, project_cost, estimated_dev_cost, quarter, year)
     
     est_cost = estimated_dev_cost or {}
     pc = project_cost or {}
-    
-    land_cost = est_cost.get('land_cost', 0)
-    building_cost = est_cost.get('total_building_cost', 0)
-    infra_cost = est_cost.get('infrastructure_cost', 0)
-    other_cost = est_cost.get('other_costs', 0)
-    total_estimated = land_cost + building_cost + infra_cost + other_cost
-    
+
+    # Estimated costs from estimated_dev_cost collection
+    land_cost_est    = pc.get('total_land_cost_estimated', pc.get('land_acquisition_estimated', 0))
+    building_cost_est = est_cost.get('buildings_cost', est_cost.get('total_building_cost', 0))
+    infra_cost_est   = est_cost.get('infrastructure_cost', 0)
+    other_cost_est   = est_cost.get('consultants_fee', 0) + est_cost.get('machinery_cost', est_cost.get('other_costs', 0))
+    total_estimated  = land_cost_est + building_cost_est + infra_cost_est + other_cost_est
+
+    # Actual costs from project_cost (CA-entered financial data)
+    land_cost_act    = pc.get('total_land_cost', 0)
+    building_cost_act = pc.get('construction_cost_actual', 0)
+    infra_cost_act   = pc.get('onsite_services_cost', pc.get('infrastructure_cost', 0))
+    other_cost_act   = pc.get('taxes_statutory', 0) + pc.get('finance_cost', 0)
+    total_actual     = pc.get('total_cost_incurred', land_cost_act + building_cost_act + infra_cost_act + other_cost_act)
+
     cost_data = [
         ["Sr.", "Particulars", "Estimated Cost (₹)", "Actual Cost (₹)"],
-        ["1", "Cost of Land", format_indian_number(land_cost), "-"],
-        ["2", "Cost of Construction of Buildings", format_indian_number(building_cost), "-"],
-        ["3", "Cost of Internal/External Development Works", format_indian_number(infra_cost), "-"],
-        ["4", "Administrative and Other Costs", format_indian_number(other_cost), "-"],
-        ["", "TOTAL PROJECT COST", format_indian_number(total_estimated), "-"],
+        ["1", "Cost of Land",
+         format_indian_number(land_cost_est),
+         format_indian_number(land_cost_act) if land_cost_act else "-"],
+        ["2", "Cost of Construction of Buildings",
+         format_indian_number(building_cost_est),
+         format_indian_number(building_cost_act) if building_cost_act else "-"],
+        ["3", "Cost of Internal/External Development Works",
+         format_indian_number(infra_cost_est),
+         format_indian_number(infra_cost_act) if infra_cost_act else "-"],
+        ["4", "Administrative and Other Costs (Taxes, Finance)",
+         format_indian_number(other_cost_est),
+         format_indian_number(other_cost_act) if other_cost_act else "-"],
+        ["", "TOTAL PROJECT COST",
+         format_indian_number(total_estimated),
+         format_indian_number(total_actual) if total_actual else "-"],
     ]
     
     cost_table = Table(cost_data, colWidths=[0.5*inch, 3*inch, 1.5*inch, 1.3*inch])
@@ -740,25 +771,25 @@ def generate_annexure_a_pdf(project, sales, buildings, quarter, year):
     total_balance = 0
     
     for idx, sale in enumerate(sales or [], 1):
-        agreement_value = sale.get('agreement_value', 0)
+        agreement_value = sale.get('sale_value', sale.get('agreement_value', 0))
         amount_received = sale.get('amount_received', 0)
         balance = agreement_value - amount_received
-        
+
         total_value += agreement_value
         total_received += amount_received
         total_balance += balance
-        
+
         row = [
             str(idx),
             sale.get('unit_number', ''),
-            building_lookup.get(sale.get('building_id'), sale.get('building_id', '')),
-            sale.get('unit_type', ''),
+            building_lookup.get(sale.get('building_id'), sale.get('building_name', '')),
+            sale.get('unit_type', sale.get('flat_type', '')),
             str(sale.get('carpet_area', '')),
             format_indian_number(agreement_value),
             format_indian_number(amount_received),
             format_indian_number(balance),
-            format_date(sale.get('due_date', '')),
-            sale.get('allottee_name', '')
+            format_date(sale.get('agreement_date', sale.get('due_date', ''))),
+            sale.get('buyer_name', sale.get('allottee_name', ''))
         ]
         table_data.append(row)
     

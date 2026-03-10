@@ -2741,8 +2741,8 @@ async def generate_pdf_report(
             
         elif report_type == "form-3":
             pdf_buffer = generate_form3_pdf(
-                project, buildings, building_costs, 
-                estimated_dev_cost, quarter, year
+                project, buildings, construction_progress,
+                infrastructure_progress, estimated_dev_cost, quarter, year
             )
             filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
             
@@ -2830,7 +2830,7 @@ async def generate_excel_report(
             buf = generate_form1_excel(project, buildings, construction_progress, infrastructure_progress, quarter, year)
             filename = f"Form1_Construction_Progress_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
         elif report_type == "form-3":
-            buf = generate_form3_excel(project, buildings, building_costs, estimated_dev_cost, quarter, year)
+            buf = generate_form3_excel(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year)
             filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
         elif report_type == "form-4":
             buf = generate_form4_excel(project, project_cost, estimated_dev_cost, quarter, year)
@@ -2901,7 +2901,7 @@ async def generate_docx_report(
             buf = generate_form1_docx(project, buildings, construction_progress, infrastructure_progress, quarter, year)
             filename = f"Form1_Construction_Progress_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
         elif report_type == "form-3":
-            buf = generate_form3_docx(project, buildings, building_costs, estimated_dev_cost, quarter, year)
+            buf = generate_form3_docx(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year)
             filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
         elif report_type == "form-4":
             buf = generate_form4_docx(project, project_cost, estimated_dev_cost, quarter, year)

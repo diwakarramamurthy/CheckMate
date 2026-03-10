@@ -320,7 +320,8 @@ def generate_form1_docx(project, buildings, construction_progress, infrastructur
 
 # ─── FORM 3 ──────────────────────────────────────────────────────────────────
 
-def generate_form3_docx(project, buildings, building_costs, estimated_dev_cost, quarter, year):
+def generate_form3_docx(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year):
+    """Form-3: Cost Incurred = (% Work Completed from Construction Progress) × Estimated Cost"""
     doc = Document()
     section_margins(doc)
 
@@ -357,35 +358,40 @@ def generate_form3_docx(project, buildings, building_costs, estimated_dev_cost, 
         f"{project.get('project_name', '________')}, RERA No. {project.get('rera_number', '________')}."
     ), size=10)
 
-    # TABLE A
+    # TABLE A — Cost Incurred = completion% × estimated_cost
     add_para(doc, "")
     add_section_heading(doc, "TABLE A: Cost Incurred for Building Construction")
 
-    bc_lookup = {bc.get("building_id"): bc for bc in (building_costs or [])}
+    cp_lookup = {cp.get("building_id"): cp for cp in (construction_progress or [])}
     total_est = total_inc = 0
 
-    rows_a = [["Sr.", "Building / Wing", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)"]]
+    rows_a = [["Sr.", "Building / Wing", "% Complete", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)"]]
     for idx, b in enumerate(buildings or [], 1):
-        bc = bc_lookup.get(b.get("building_id"), {})
+        progress = cp_lookup.get(b.get("building_id"), {})
+        completion_pct = progress.get("overall_completion", 0)
         est = b.get("estimated_cost", 0)
-        inc = bc.get("actual_cost", 0)
+        inc = round((completion_pct / 100) * est)
         bal = est - inc
         total_est += est
         total_inc += inc
         rows_a.append([str(idx), b.get("building_name", ""),
+                        f"{completion_pct:.1f}%",
                         format_indian_number(est), format_indian_number(inc), format_indian_number(bal)])
-    rows_a.append(["", "TOTAL",
+    rows_a.append(["", "TOTAL", "",
                    format_indian_number(total_est), format_indian_number(total_inc),
                    format_indian_number(total_est - total_inc)])
 
     add_data_table(doc, rows_a)
 
-    # TABLE B
+    # TABLE B — Infra Cost Incurred = completion% × estimated_infra_cost
     add_para(doc, "")
     add_section_heading(doc, "TABLE B: Cost of Internal / External Development Works")
 
     est_c = estimated_dev_cost or {}
     infra_cost = est_c.get("infrastructure_cost", 0)
+    infra_completion = (infrastructure_progress or {}).get("overall_completion", 0)
+    infra_incurred = round((infra_completion / 100) * infra_cost)
+    infra_balance = infra_cost - infra_incurred
 
     rows_b = [
         ["Sr.", "Development Work", "Estimated (₹)", "Incurred (₹)", "Balance (₹)"],
@@ -399,7 +405,10 @@ def generate_form3_docx(project, buildings, building_costs, estimated_dev_cost, 
         ["8", "Swimming Pool", "—", "—", "—"],
         ["9", "Electrical Infrastructure", "—", "—", "—"],
         ["10", "Boundary Wall & Gate", "—", "—", "—"],
-        ["", "TOTAL INFRASTRUCTURE", format_indian_number(infra_cost), "—", "—"],
+        ["", "TOTAL INFRASTRUCTURE",
+         format_indian_number(infra_cost),
+         format_indian_number(infra_incurred),
+         format_indian_number(infra_balance)],
     ]
     add_data_table(doc, rows_b)
 
@@ -463,19 +472,32 @@ def generate_form4_docx(project, project_cost, estimated_dev_cost, quarter, year
     add_section_heading(doc, "PROJECT COST STATEMENT")
 
     est_c = estimated_dev_cost or {}
-    land_cost     = est_c.get("land_cost", 0)
-    building_cost = est_c.get("total_building_cost", 0)
-    infra_cost    = est_c.get("infrastructure_cost", 0)
-    other_cost    = est_c.get("other_costs", 0)
-    total_est     = land_cost + building_cost + infra_cost + other_cost
+    pc    = project_cost or {}
+
+    # Estimated costs
+    land_cost_est    = pc.get("total_land_cost_estimated", pc.get("land_acquisition_estimated", 0))
+    building_cost_est = est_c.get("buildings_cost", est_c.get("total_building_cost", 0))
+    infra_cost_est   = est_c.get("infrastructure_cost", 0)
+    other_cost_est   = est_c.get("consultants_fee", 0) + est_c.get("machinery_cost", est_c.get("other_costs", 0))
+    total_est        = land_cost_est + building_cost_est + infra_cost_est + other_cost_est
+
+    # Actual costs from project_cost (CA-entered financial data)
+    land_cost_act    = pc.get("total_land_cost", 0)
+    building_cost_act = pc.get("construction_cost_actual", 0)
+    infra_cost_act   = pc.get("onsite_services_cost", pc.get("infrastructure_cost", 0))
+    other_cost_act   = pc.get("taxes_statutory", 0) + pc.get("finance_cost", 0)
+    total_act        = pc.get("total_cost_incurred", land_cost_act + building_cost_act + infra_cost_act + other_cost_act)
+
+    def fmt_act(v):
+        return format_indian_number(v) if v else "—"
 
     cost_rows = [
-        ["Sr.", "Particulars", "Estimated Cost (₹)", "Actual Cost (₹)"],
-        ["1", "Cost of Land",                                    format_indian_number(land_cost),     "—"],
-        ["2", "Cost of Construction of Buildings",               format_indian_number(building_cost), "—"],
-        ["3", "Cost of Development Works (Infrastructure)",      format_indian_number(infra_cost),    "—"],
-        ["4", "Administrative & Other Costs",                    format_indian_number(other_cost),    "—"],
-        ["",  "TOTAL PROJECT COST",                              format_indian_number(total_est),     "—"],
+        ["Sr.", "Particulars",                                        "Estimated Cost (₹)",               "Actual Cost (₹)"],
+        ["1",   "Cost of Land",                                       format_indian_number(land_cost_est),    fmt_act(land_cost_act)],
+        ["2",   "Cost of Construction of Buildings",                  format_indian_number(building_cost_est), fmt_act(building_cost_act)],
+        ["3",   "Cost of Development Works (Infrastructure)",         format_indian_number(infra_cost_est),   fmt_act(infra_cost_act)],
+        ["4",   "Administrative & Other Costs (Taxes, Finance)",      format_indian_number(other_cost_est),   fmt_act(other_cost_act)],
+        ["",    "TOTAL PROJECT COST",                                 format_indian_number(total_est),        fmt_act(total_act)],
     ]
     add_data_table(doc, cost_rows)
 
@@ -541,7 +563,7 @@ def generate_annexure_a_docx(project, sales, buildings, quarter, year):
     all_rows = [headers]
 
     for idx, sale in enumerate(sales or [], 1):
-        agr  = sale.get("agreement_value", 0)
+        agr  = sale.get("sale_value", sale.get("agreement_value", 0))
         recv = sale.get("amount_received", 0)
         bal  = agr - recv
         total_val  += agr
@@ -550,14 +572,14 @@ def generate_annexure_a_docx(project, sales, buildings, quarter, year):
         all_rows.append([
             str(idx),
             sale.get("unit_number", ""),
-            bl.get(sale.get("building_id"), ""),
-            sale.get("unit_type", ""),
+            bl.get(sale.get("building_id"), sale.get("building_name", "")),
+            sale.get("unit_type", sale.get("flat_type", "")),
             str(sale.get("carpet_area", "")),
             format_indian_number(agr),
             format_indian_number(recv),
             format_indian_number(bal),
-            sale.get("due_date", ""),
-            sale.get("allottee_name", ""),
+            sale.get("agreement_date", sale.get("due_date", "")),
+            sale.get("buyer_name", sale.get("allottee_name", "")),
         ])
 
     if not sales:

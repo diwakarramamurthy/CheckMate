@@ -294,18 +294,19 @@ def generate_form1_excel(project, buildings, construction_progress, infrastructu
 
 # ─── FORM 3 ──────────────────────────────────────────────────────────────────
 
-def generate_form3_excel(project, buildings, building_costs, estimated_dev_cost, quarter, year):
+def generate_form3_excel(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year):
+    """Form-3: Cost Incurred = (% Work Completed from Construction Progress) × Estimated Cost"""
     wb = Workbook()
     ws = wb.active
     ws.title = "Form 3 - Cost Incurred"
 
-    ws.merge_cells("A1:F1")
+    ws.merge_cells("A1:G1")
     title_cell(ws["A1"], "The Goa Real Estate (Regulation and Development) Rules 2017")
     ws.row_dimensions[1].height = 28
-    ws.merge_cells("A2:F2")
+    ws.merge_cells("A2:G2")
     title_cell(ws["A2"], "FORM 3 — ENGINEER'S CERTIFICATE")
     ws.row_dimensions[2].height = 24
-    ws.merge_cells("A3:F3")
+    ws.merge_cells("A3:G3")
     ws["A3"].value = "(Cost Incurred Statement for Development)"
     ws["A3"].font = Font(italic=True, size=10, color="FFFFFF")
     ws["A3"].fill = TITLE_FILL
@@ -322,59 +323,63 @@ def generate_form3_excel(project, buildings, building_costs, estimated_dev_cost,
     for i, (lbl, val) in enumerate(info, 5):
         ws.merge_cells(f"A{i}:B{i}")
         label_cell(ws[f"A{i}"], lbl)
-        ws.merge_cells(f"C{i}:F{i}")
+        ws.merge_cells(f"C{i}:G{i}")
         value_cell(ws[f"C{i}"], val)
 
-    # TABLE A
+    # TABLE A — Cost Incurred = completion% × estimated_cost
     row = 12
-    ws.merge_cells(f"A{row}:F{row}")
+    ws.merge_cells(f"A{row}:G{row}")
     section_cell(ws[f"A{row}"], "TABLE A: Cost Incurred for Building Construction")
     ws.row_dimensions[row].height = 22
     row += 1
 
-    hdrs = ["Sr.", "Building / Wing", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)", "% Utilized"]
+    hdrs = ["Sr.", "Building / Wing", "% Complete", "Estimated Cost (₹)", "Cost Incurred (₹)", "Balance (₹)", ""]
     for c, h in enumerate(hdrs, 1):
         header_cell(ws.cell(row=row, column=c), h)
     ws.row_dimensions[row].height = 28
     row += 1
 
-    bc_lookup = {bc.get("building_id"): bc for bc in (building_costs or [])}
+    cp_lookup = {cp.get("building_id"): cp for cp in (construction_progress or [])}
     total_est = total_inc = 0
 
     for idx, b in enumerate(buildings or [], 1):
-        bc = bc_lookup.get(b.get("building_id"), {})
+        progress = cp_lookup.get(b.get("building_id"), {})
+        completion_pct = progress.get("overall_completion", 0)
         est = b.get("estimated_cost", 0)
-        inc = bc.get("actual_cost", 0)
+        inc = round((completion_pct / 100) * est)
         bal = est - inc
-        pct_used = f"{(inc / est * 100):.1f}%" if est > 0 else "0%"
         total_est += est
         total_inc += inc
 
         data_cell(ws.cell(row=row, column=1), str(idx), align="center")
         data_cell(ws.cell(row=row, column=2), b.get("building_name", ""))
-        data_cell(ws.cell(row=row, column=3), format_indian_number(est), align="right")
-        data_cell(ws.cell(row=row, column=4), format_indian_number(inc), align="right")
-        data_cell(ws.cell(row=row, column=5), format_indian_number(bal), align="right")
-        data_cell(ws.cell(row=row, column=6), pct_used, align="center")
+        data_cell(ws.cell(row=row, column=3), f"{completion_pct:.1f}%", align="center")
+        data_cell(ws.cell(row=row, column=4), format_indian_number(est), align="right")
+        data_cell(ws.cell(row=row, column=5), format_indian_number(inc), align="right")
+        data_cell(ws.cell(row=row, column=6), format_indian_number(bal), align="right")
         row += 1
 
-    for c in range(1, 7):
+    for c in range(1, 8):
         total_cell(ws.cell(row=row, column=c), "")
     total_cell(ws.cell(row=row, column=2), "TOTAL", align="center")
-    total_cell(ws.cell(row=row, column=3), format_indian_number(total_est))
-    total_cell(ws.cell(row=row, column=4), format_indian_number(total_inc))
-    total_cell(ws.cell(row=row, column=5), format_indian_number(total_est - total_inc))
+    total_cell(ws.cell(row=row, column=4), format_indian_number(total_est), align="right")
+    total_cell(ws.cell(row=row, column=5), format_indian_number(total_inc), align="right")
+    total_cell(ws.cell(row=row, column=6), format_indian_number(total_est - total_inc), align="right")
     row += 2
 
-    # TABLE B — Infrastructure placeholder
-    ws.merge_cells(f"A{row}:F{row}")
+    # TABLE B — Infra Cost Incurred = completion% × estimated_infra_cost
+    ws.merge_cells(f"A{row}:G{row}")
     section_cell(ws[f"A{row}"], "TABLE B: Cost of Internal/External Development Works")
     ws.row_dimensions[row].height = 22
     row += 1
 
     est_c = estimated_dev_cost or {}
     infra_cost = est_c.get("infrastructure_cost", 0)
-    b_hdrs = ["Sr.", "Development Work", "Estimated (₹)", "Incurred (₹)", "Balance (₹)", ""]
+    infra_completion = (infrastructure_progress or {}).get("overall_completion", 0)
+    infra_incurred = round((infra_completion / 100) * infra_cost)
+    infra_balance = infra_cost - infra_incurred
+
+    b_hdrs = ["Sr.", "Development Work", "% Complete", "Estimated (₹)", "Incurred (₹)", "Balance (₹)", ""]
     for c, h in enumerate(b_hdrs, 1):
         header_cell(ws.cell(row=row, column=c), h)
     ws.row_dimensions[row].height = 28
@@ -390,22 +395,24 @@ def generate_form3_excel(project, buildings, building_costs, estimated_dev_cost,
     for sr_no, work in b_rows:
         data_cell(ws.cell(row=row, column=1), sr_no, align="center")
         data_cell(ws.cell(row=row, column=2), work)
-        for c in range(3, 7):
+        for c in range(3, 8):
             data_cell(ws.cell(row=row, column=c), "—", align="center")
         row += 1
 
-    for c in range(1, 7):
+    for c in range(1, 8):
         total_cell(ws.cell(row=row, column=c), "")
     total_cell(ws.cell(row=row, column=2), "TOTAL INFRASTRUCTURE", align="center")
-    total_cell(ws.cell(row=row, column=3), format_indian_number(infra_cost))
-    total_cell(ws.cell(row=row, column=4), "—", align="center")
-    total_cell(ws.cell(row=row, column=5), "—", align="center")
+    total_cell(ws.cell(row=row, column=3), f"{infra_completion:.1f}%", align="center")
+    total_cell(ws.cell(row=row, column=4), format_indian_number(infra_cost), align="right")
+    total_cell(ws.cell(row=row, column=5), format_indian_number(infra_incurred), align="right")
+    total_cell(ws.cell(row=row, column=6), format_indian_number(infra_balance), align="right")
 
     ws.column_dimensions["A"].width = 6
-    ws.column_dimensions["B"].width = 28
-    for col in ["C", "D", "E"]:
+    ws.column_dimensions["B"].width = 30
+    ws.column_dimensions["C"].width = 12
+    for col in ["D", "E", "F"]:
         ws.column_dimensions[col].width = 20
-    ws.column_dimensions["F"].width = 14
+    ws.column_dimensions["G"].width = 4
 
     buf = BytesIO()
     wb.save(buf)
@@ -459,31 +466,44 @@ def generate_form4_excel(project, project_cost, estimated_dev_cost, quarter, yea
     row += 1
 
     est_c = estimated_dev_cost or {}
-    land_cost     = est_c.get("land_cost", 0)
-    building_cost = est_c.get("total_building_cost", 0)
-    infra_cost    = est_c.get("infrastructure_cost", 0)
-    other_cost    = est_c.get("other_costs", 0)
-    total_est     = land_cost + building_cost + infra_cost + other_cost
+    pc    = project_cost or {}
 
-    for sr_no, desc, est in [
-        (1, "Cost of Land", land_cost),
-        (2, "Cost of Construction of Buildings", building_cost),
-        (3, "Cost of Development Works (Infrastructure)", infra_cost),
-        (4, "Administrative & Other Costs", other_cost),
-    ]:
+    # Estimated costs
+    land_cost_est    = pc.get("total_land_cost_estimated", pc.get("land_acquisition_estimated", 0))
+    building_cost_est = est_c.get("buildings_cost", est_c.get("total_building_cost", 0))
+    infra_cost_est   = est_c.get("infrastructure_cost", 0)
+    other_cost_est   = est_c.get("consultants_fee", 0) + est_c.get("machinery_cost", est_c.get("other_costs", 0))
+    total_est        = land_cost_est + building_cost_est + infra_cost_est + other_cost_est
+
+    # Actual costs from project_cost (CA-entered financial data)
+    land_cost_act    = pc.get("total_land_cost", 0)
+    building_cost_act = pc.get("construction_cost_actual", 0)
+    infra_cost_act   = pc.get("onsite_services_cost", pc.get("infrastructure_cost", 0))
+    other_cost_act   = pc.get("taxes_statutory", 0) + pc.get("finance_cost", 0)
+    total_act        = pc.get("total_cost_incurred", land_cost_act + building_cost_act + infra_cost_act + other_cost_act)
+
+    rows_data = [
+        (1, "Cost of Land",                                 land_cost_est,    land_cost_act),
+        (2, "Cost of Construction of Buildings",             building_cost_est, building_cost_act),
+        (3, "Cost of Development Works (Infrastructure)",    infra_cost_est,   infra_cost_act),
+        (4, "Administrative & Other Costs (Taxes, Finance)", other_cost_est,   other_cost_act),
+    ]
+
+    for sr_no, desc, est, act in rows_data:
         data_cell(ws.cell(row=row, column=1), str(sr_no), align="center")
         data_cell(ws.cell(row=row, column=2), desc)
         data_cell(ws.cell(row=row, column=3), format_indian_number(est), align="right")
-        data_cell(ws.cell(row=row, column=4), "—", align="center")
-        data_cell(ws.cell(row=row, column=5), "—", align="center")
+        data_cell(ws.cell(row=row, column=4), format_indian_number(act) if act else "—", align="right")
+        variance = est - act if act else 0
+        data_cell(ws.cell(row=row, column=5), format_indian_number(variance) if act else "—", align="right")
         row += 1
 
     for c in range(1, 6):
         total_cell(ws.cell(row=row, column=c), "")
     total_cell(ws.cell(row=row, column=2), "TOTAL PROJECT COST", align="center")
-    total_cell(ws.cell(row=row, column=3), format_indian_number(total_est))
-    total_cell(ws.cell(row=row, column=4), "—", align="center")
-    total_cell(ws.cell(row=row, column=5), "—", align="center")
+    total_cell(ws.cell(row=row, column=3), format_indian_number(total_est), align="right")
+    total_cell(ws.cell(row=row, column=4), format_indian_number(total_act) if total_act else "—", align="right")
+    total_cell(ws.cell(row=row, column=5), format_indian_number(total_est - total_act) if total_act else "—", align="right")
     row += 2
 
     # Bank Details
@@ -551,23 +571,23 @@ def generate_annexure_a_excel(project, sales, buildings, quarter, year):
 
     for idx, sale in enumerate(sales or [], 1):
         r = idx + 4
-        agr = sale.get("agreement_value", 0)
+        agr  = sale.get("sale_value", sale.get("agreement_value", 0))
         recv = sale.get("amount_received", 0)
-        bal = agr - recv
+        bal  = agr - recv
         total_val  += agr
         total_recv += recv
         total_bal  += bal
 
         data_cell(ws.cell(row=r, column=1),  str(idx), align="center")
         data_cell(ws.cell(row=r, column=2),  sale.get("unit_number", ""), align="center")
-        data_cell(ws.cell(row=r, column=3),  bl.get(sale.get("building_id"), ""))
-        data_cell(ws.cell(row=r, column=4),  sale.get("unit_type", ""), align="center")
+        data_cell(ws.cell(row=r, column=3),  bl.get(sale.get("building_id"), sale.get("building_name", "")))
+        data_cell(ws.cell(row=r, column=4),  sale.get("unit_type", sale.get("flat_type", "")), align="center")
         data_cell(ws.cell(row=r, column=5),  str(sale.get("carpet_area", "")), align="center")
         data_cell(ws.cell(row=r, column=6),  format_indian_number(agr), align="right")
         data_cell(ws.cell(row=r, column=7),  format_indian_number(recv), align="right")
         data_cell(ws.cell(row=r, column=8),  format_indian_number(bal), align="right")
-        data_cell(ws.cell(row=r, column=9),  sale.get("due_date", ""), align="center")
-        data_cell(ws.cell(row=r, column=10), sale.get("allottee_name", ""))
+        data_cell(ws.cell(row=r, column=9),  sale.get("agreement_date", sale.get("due_date", "")), align="center")
+        data_cell(ws.cell(row=r, column=10), sale.get("buyer_name", sale.get("allottee_name", "")))
 
     total_row = len(sales or []) + 5
     for c in range(1, 11):
