@@ -516,7 +516,7 @@ def generate_form4_excel(project, project_cost, estimated_dev_cost, quarter, yea
         ("Bank Name:", project.get("bank_name", "—")),
         ("Account Number:", project.get("bank_account_number", "—")),
         ("IFSC Code:", project.get("bank_ifsc", "—")),
-        ("Branch:", project.get("bank_branch", "—")),
+        ("Branch:", project.get("designated_bank_name", "—")),
     ]:
         ws.merge_cells(f"A{row}:B{row}")
         label_cell(ws[f"A{row}"], lbl)

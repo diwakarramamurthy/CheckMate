@@ -508,7 +508,7 @@ def generate_form4_docx(project, project_cost, estimated_dev_cost, quarter, year
         ("Bank Name",       project.get("bank_name", "—")),
         ("Account Number",  project.get("bank_account_number", "—")),
         ("IFSC Code",       project.get("bank_ifsc", "—")),
-        ("Branch",          project.get("bank_branch", "—")),
+        ("Branch",          project.get("designated_bank_name", "—")),
     ])
 
     add_para(doc, "")
@@ -517,8 +517,8 @@ def generate_form4_docx(project, project_cost, estimated_dev_cost, quarter, year
     add_para(doc, "")
     add_para(doc, "_______________________________")
     add_para(doc, f"Signature & Name: {project.get('ca_name', '________________________')}", bold=True)
-    add_para(doc, f"Membership No.: {project.get('ca_membership', '________________________')}")
-    add_para(doc, f"Firm Registration No.: {project.get('ca_firm_reg', '________________________')}")
+    add_para(doc, f"Membership No.: {project.get('ca_membership_number', '________________________')}")
+    add_para(doc, f"Firm Registration No.: {project.get('ca_firm_name', '________________________')}")
 
     buf = BytesIO()
     doc.save(buf)

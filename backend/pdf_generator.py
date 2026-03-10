@@ -162,7 +162,7 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
     # To section
     to_text = f"""<b>To</b><br/>
     {project.get('promoter_name', '________________________')},<br/>
-    {project.get('promoter_address', project.get('address', '________________________'))},<br/>
+    {project.get('promoter_address', project.get('project_address', '________________________'))},<br/>
     {project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', 'Goa')}
     """
     elements.append(Paragraph(to_text, BODY_STYLE))
@@ -174,13 +174,13 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
     
     # Subject line
     num_buildings = len(buildings) if buildings else "__"
-    phase = project.get('phase', '1')
+    phase = project.get('project_phase', '1')
     subject_text = f"""<b>Subject:</b> Certificate of Percentage of Completion of Construction Work of 
     <b>{num_buildings}</b> Building(s) / Wing(s) of the <b>{phase}</b> Phase of the Project situated on the Plot bearing 
     Survey No./Plot No. <b>{project.get('survey_number', '________')}</b> of Ward <b>{project.get('ward', '________')}</b> 
     Municipality <b>{project.get('municipality', '________')}</b> District <b>{project.get('district', 'North Goa')}</b> 
     PIN <b>{project.get('pin_code', '________')}</b> village/panchayat <b>{project.get('village', '________')}</b> 
-    taluka <b>{project.get('taluka', '________')}</b> admeasuring <b>{project.get('total_area', '________')}</b> sq.mts. 
+    taluka <b>{project.get('taluka', '________')}</b> admeasuring <b>{project.get('plot_area', '________')}</b> sq.mts. 
     area being developed by <b>{project.get('promoter_name', '________')}</b>
     """
     elements.append(Paragraph(subject_text, BODY_STYLE))
@@ -201,7 +201,7 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
     of the <b>{phase}</b> Phase of the Project, situated on the plot bearing Survey No./Plot No. 
     <b>{project.get('survey_number', '________')}</b> of Ward <b>{project.get('ward', '________')}</b> 
     Municipality/Village <b>{project.get('village', '________')}</b> District <b>{project.get('district', 'North Goa')}</b> 
-    admeasuring <b>{project.get('total_area', '________')}</b> sq.mts. area being developed by 
+    admeasuring <b>{project.get('plot_area', '________')}</b> sq.mts. area being developed by 
     <b>{project.get('promoter_name', '________')}</b>.
     """
     elements.append(Paragraph(assignment_text, BODY_STYLE))
@@ -213,9 +213,9 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
     
     professionals = [
         [f"(i) M/s/Shri/Smt. {project.get('architect_name', '________________________')} as Architect;"],
-        [f"(ii) M/s/Shri/Smt. {project.get('structural_consultant', '________________________')} as Structural Consultant;"],
-        [f"(iii) M/s/Shri/Smt. {project.get('mep_consultant', '________________________')} as MEP Consultant;"],
-        [f"(iv) M/s/Shri/Smt. {project.get('site_supervisor', '________________________')} as Site Supervisor;"],
+        [f"(ii) M/s/Shri/Smt. {project.get('structural_consultant_name', '________________________')} as Structural Consultant;"],
+        [f"(iii) M/s/Shri/Smt. {project.get('mep_consultant_name', '________________________')} as MEP Consultant;"],
+        [f"(iv) M/s/Shri/Smt. {project.get('site_supervisor_name', '________________________')} as Site Supervisor;"],
     ]
     
     prof_table = Table(professionals, colWidths=[6.5*inch])
@@ -409,7 +409,7 @@ def generate_form3_pdf(project, buildings, construction_progress, infrastructure
     # To section
     to_text = f"""<b>To</b><br/>
     {project.get('promoter_name', '________________________')},<br/>
-    {project.get('promoter_address', project.get('address', '________________________'))},<br/>
+    {project.get('promoter_address', project.get('project_address', '________________________'))},<br/>
     {project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', 'Goa')}
     """
     elements.append(Paragraph(to_text, BODY_STYLE))
@@ -595,7 +595,7 @@ def generate_form4_pdf(project, project_cost, estimated_dev_cost, quarter, year)
     # To section
     to_text = f"""<b>To</b><br/>
     {project.get('promoter_name', '________________________')},<br/>
-    {project.get('promoter_address', project.get('address', '________________________'))},<br/>
+    {project.get('promoter_address', project.get('project_address', '________________________'))},<br/>
     {project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', 'Goa')}
     """
     elements.append(Paragraph(to_text, BODY_STYLE))
@@ -691,10 +691,10 @@ def generate_form4_pdf(project, project_cost, estimated_dev_cost, quarter, year)
     elements.append(Spacer(1, 8))
     
     bank_data = [
-        ["Bank Name:", project.get('bank_name', '________________________')],
-        ["Account Number:", project.get('bank_account_number', '________________________')],
-        ["IFSC Code:", project.get('bank_ifsc', '________________________')],
-        ["Branch:", project.get('bank_branch', '________________________')],
+        ["Bank Name:", project.get('designated_bank_name', '________________________')],
+        ["Account Number:", project.get('designated_account_number', '________________________')],
+        ["IFSC Code:", project.get('designated_ifsc_code', '________________________')],
+        ["Branch:", project.get('designated_bank_name', '________________________')],
     ]
     
     bank_table = Table(bank_data, colWidths=[1.5*inch, 4*inch])
@@ -716,8 +716,8 @@ def generate_form4_pdf(project, project_cost, estimated_dev_cost, quarter, year)
         ["_______________________________", ""],
         ["Signature & Name of Chartered Accountant", ""],
         [f"Name: {project.get('ca_name', '________________________')}", ""],
-        [f"Membership No.: {project.get('ca_membership', '________________________')}", ""],
-        [f"Firm Registration No.: {project.get('ca_firm_reg', '________________________')}", ""],
+        [f"Membership No.: {project.get('ca_membership_number', '________________________')}", ""],
+        [f"Firm Registration No.: {project.get('ca_firm_name', '________________________')}", ""],
     ]
     sig_table = Table(sig_data, colWidths=[4*inch, 2*inch])
     sig_table.setStyle(TableStyle([
