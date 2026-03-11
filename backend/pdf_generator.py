@@ -570,162 +570,625 @@ def generate_form3_pdf(project, buildings, construction_progress, infrastructure
     return buffer
 
 
-def generate_form4_pdf(project, project_cost, estimated_dev_cost, quarter, year):
+def generate_form4_pdf(project, form4_data, quarter, year):
     """
-    FORM-4: Chartered Accountant's Certificate - Project Cost Statement
-    Official Goa RERA Format
+    FORM-4: Chartered Accountant's Certificate - CA Certificate format.
+    Matches the Excel CA Certificate format exactly:
+    Columns: Sr No / Particulars / Estimated Amount in Rs. / Incurred Amount in Rs.
+    form4_data is a pre-computed dict from server._build_form4_data().
     """
     buffer = BytesIO()
+    # Use landscape A4 to give more width for the 4-column table
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch,
-                           leftMargin=0.5*inch, rightMargin=0.5*inch)
+                            leftMargin=0.5*inch, rightMargin=0.5*inch)
     elements = []
-    
-    # Header
-    elements.append(Paragraph("The Goa Real Estate (Regulation and Development)", SMALL_STYLE))
-    elements.append(Paragraph("(Registration of Real Estate Projects, Registration of Real Estate Agents,", SMALL_STYLE))
-    elements.append(Paragraph("Rates of Interest and Disclosures on Website) Rules 2017", SMALL_STYLE))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph("<b>FORM 4</b>", TITLE_STYLE))
-    elements.append(Paragraph("<i>(See Rule 5 (1) (a) (ii))</i>", RULE_STYLE))
-    elements.append(Paragraph("<b>CHARTERED ACCOUNTANT'S CERTIFICATE</b>", SUBTITLE_STYLE))
-    elements.append(Paragraph("(Project Cost Statement)", SMALL_STYLE))
-    elements.append(Spacer(1, 15))
-    
-    # To section
-    to_text = f"""<b>To</b><br/>
-    {project.get('promoter_name', '________________________')},<br/>
-    {project.get('promoter_address', project.get('project_address', '________________________'))},<br/>
-    {project.get('village', '')}, {project.get('taluka', '')}, {project.get('district', 'Goa')}
-    """
-    elements.append(Paragraph(to_text, BODY_STYLE))
-    elements.append(Spacer(1, 8))
-    
-    # Date
-    elements.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", RIGHT_STYLE))
-    elements.append(Spacer(1, 10))
-    
-    # Subject
-    subject_text = f"""<b>Subject:</b> Certificate of Project Cost for the Project 
-    <b>{project.get('project_name', '________')}</b> registered under GoaRERA.
-    """
-    elements.append(Paragraph(subject_text, BODY_STYLE))
-    elements.append(Spacer(1, 8))
-    
-    # Reference
-    elements.append(Paragraph(f"<b>Ref: Goa RERA Registration Number:</b> {project.get('rera_number', '_________________________')}", BODY_STYLE))
-    elements.append(Spacer(1, 10))
-    
-    # Salutation
-    elements.append(Paragraph("<b>Sir,</b>", BODY_STYLE))
-    elements.append(Spacer(1, 8))
-    
-    # Assignment statement
-    ca_name = project.get('ca_name', '________________________')
-    assignment_text = f"""I/We <b>{ca_name}</b>, Chartered Accountant(s), have examined the books of accounts and 
-    records of the promoter and certify the following with respect to the project cost of 
-    <b>{project.get('project_name', '________')}</b> as registered under GoaRERA.
-    """
-    elements.append(Paragraph(assignment_text, BODY_STYLE))
-    elements.append(Spacer(1, 15))
-    
-    # Project Cost Summary Table
-    elements.append(Paragraph("<b>PROJECT COST STATEMENT</b>", HEADER_STYLE))
-    elements.append(Spacer(1, 8))
-    
-    est_cost = estimated_dev_cost or {}
-    pc = project_cost or {}
 
-    # Estimated costs from estimated_dev_cost collection
-    land_cost_est    = pc.get('total_land_cost_estimated', pc.get('land_acquisition_estimated', 0))
-    building_cost_est = est_cost.get('buildings_cost', est_cost.get('total_building_cost', 0))
-    infra_cost_est   = est_cost.get('infrastructure_cost', 0)
-    other_cost_est   = est_cost.get('consultants_fee', 0) + est_cost.get('machinery_cost', est_cost.get('other_costs', 0))
-    total_estimated  = land_cost_est + building_cost_est + infra_cost_est + other_cost_est
+    fd = form4_data or {}
 
-    # Actual costs from project_cost (CA-entered financial data)
-    land_cost_act    = pc.get('total_land_cost', 0)
-    building_cost_act = pc.get('construction_cost_actual', 0)
-    infra_cost_act   = pc.get('onsite_services_cost', pc.get('infrastructure_cost', 0))
-    other_cost_act   = pc.get('taxes_statutory', 0) + pc.get('finance_cost', 0)
-    total_actual     = pc.get('total_cost_incurred', land_cost_act + building_cost_act + infra_cost_act + other_cost_act)
+    # Unpack all pre-computed values
+    lc_a_est      = fd.get("lc_a_est", 0);    lc_a_inc      = fd.get("lc_a_inc", 0)
+    lc_b_est      = fd.get("lc_b_est", 0);    lc_b_inc      = fd.get("lc_b_inc", 0)
+    lc_c_est      = fd.get("lc_c_est", 0);    lc_c_inc      = fd.get("lc_c_inc", 0)
+    lc_d_est      = fd.get("lc_d_est", 0);    lc_d_inc      = fd.get("lc_d_inc", 0)
+    lc_e_est      = fd.get("lc_e_est", 0);    lc_e_inc      = fd.get("lc_e_inc", 0)
+    rehab_i_est   = fd.get("rehab_i_est", 0); rehab_i_inc   = fd.get("rehab_i_inc", 0)
+    rehab_ii_inc  = fd.get("rehab_ii_inc", 0)
+    rehab_iii_inc = fd.get("rehab_iii_inc", 0)
+    rehab_iv_inc  = fd.get("rehab_iv_inc", 0)
+    rehab_any     = fd.get("rehab_any", False)
+    land_sub_est  = fd.get("land_sub_est", 0); land_sub_inc  = fd.get("land_sub_inc", 0)
+    dev_a1_est    = fd.get("dev_a1_est", 0)
+    dev_a2_inc    = fd.get("dev_a2_inc", 0)
+    dev_a3_est    = fd.get("dev_a3_est", 0);   dev_a3_inc    = fd.get("dev_a3_inc", 0)
+    dev_b_est     = fd.get("dev_b_est", 0);    dev_b_inc     = fd.get("dev_b_inc", 0)
+    dev_c_est     = fd.get("dev_c_est", 0);    dev_c_inc     = fd.get("dev_c_inc", 0)
+    dev_sub_est   = fd.get("dev_sub_est", 0);  dev_sub_inc   = fd.get("dev_sub_inc", 0)
+    total_est     = fd.get("total_est", 0);    total_inc     = fd.get("total_inc", 0)
+    arch_pct      = fd.get("arch_pct", 0)
+    proportion    = fd.get("proportion", 0)
+    withdraw_allow = fd.get("withdraw_allow", 0)
+    withdrawn_td  = fd.get("withdrawn_td", 0)
+    net_withdraw  = fd.get("net_withdraw", 0)
+    bal_cost      = fd.get("bal_cost", 0)
+    bal_recv_sold = fd.get("bal_recv_sold", 0)
+    unsold_area   = fd.get("unsold_area", 0)
+    asr_rate      = fd.get("asr_rate", 0)
+    unsold_val    = fd.get("unsold_val", 0)
+    total_recv    = fd.get("total_recv", 0)
+    deposit_pct   = fd.get("deposit_pct", 0.70)
+    deposit_amt   = fd.get("deposit_amt", 0)
+    sales         = fd.get("sales", [])
+    buildings     = fd.get("buildings", [])
+    building_map  = fd.get("building_map", {})
 
-    cost_data = [
-        ["Sr.", "Particulars", "Estimated Cost (₹)", "Actual Cost (₹)"],
-        ["1", "Cost of Land",
-         format_indian_number(land_cost_est),
-         format_indian_number(land_cost_act) if land_cost_act else "-"],
-        ["2", "Cost of Construction of Buildings",
-         format_indian_number(building_cost_est),
-         format_indian_number(building_cost_act) if building_cost_act else "-"],
-        ["3", "Cost of Internal/External Development Works",
-         format_indian_number(infra_cost_est),
-         format_indian_number(infra_cost_act) if infra_cost_act else "-"],
-        ["4", "Administrative and Other Costs (Taxes, Finance)",
-         format_indian_number(other_cost_est),
-         format_indian_number(other_cost_act) if other_cost_act else "-"],
-        ["", "TOTAL PROJECT COST",
-         format_indian_number(total_estimated),
-         format_indian_number(total_actual) if total_actual else "-"],
+    # ── Colour helpers ────────────────────────────────────────────────────────
+    C_TITLE   = colors.Color(0x1F/255, 0x38/255, 0x64/255)  # dark navy
+    C_SECTION = colors.Color(0xD9/255, 0xE1/255, 0xF2/255)  # light blue
+    C_SUBTOT  = colors.Color(0xFC/255, 0xE4/255, 0xD6/255)  # peach
+    C_SUMMARY = colors.Color(0xE2/255, 0xEF/255, 0xDA/255)  # light green
+    C_NET     = colors.Color(1.0, 1.0, 0)                   # yellow
+    C_NOTE    = colors.Color(1.0, 0.98/255*250, 0.80)       # light yellow
+    C_WHITE   = colors.white
+    C_BLACK   = colors.black
+
+    # ── Column widths (Sr / Particulars / Estimated / Incurred) ───────────────
+    CW = [0.45*inch, 3.8*inch, 1.45*inch, 1.45*inch]
+    TW = sum(CW)
+
+    # ── Local style helpers ───────────────────────────────────────────────────
+    def _ps(size=8, bold=False, align=TA_LEFT, color=None):
+        st = ParagraphStyle('_', parent=styles['Normal'],
+                            fontSize=size, leading=size * 1.2,
+                            alignment=align, fontName='Helvetica-Bold' if bold else 'Helvetica')
+        if color:
+            st.textColor = color
+        return st
+
+    def _fmtv(val, decimals=False):
+        """Format numeric value or return 'NA'."""
+        if not val:
+            return "NA"
+        v = float(val)
+        if decimals:
+            return f"{v:,.2f}"
+        return format_indian_number(int(v))
+
+    def _p(text, size=8, bold=False, align=TA_LEFT, color=None):
+        return Paragraph(text, _ps(size, bold, align, color))
+
+    def _cell(text, size=8, bold=False, align=TA_CENTER, bg=None, fg=C_BLACK, wrap=True):
+        """Build a one-cell paragraph string; used inside Table data lists."""
+        return text  # tables accept strings; we set style via TableStyle
+
+    # ── Build the master rows list ─────────────────────────────────────────────
+    # Each entry = [sr, particulars, estimated, incurred]
+    # Special marker dicts control merge/colour per row.
+
+    # We'll build a reportlab Table with style commands
+    rows = []
+    style_cmds = []
+
+    def r_idx():
+        return len(rows)
+
+    def add_row(sr, part, est, inc):
+        rows.append([str(sr) if sr is not None else "", part, est, inc])
+
+    def fv(val, dec=False):
+        if val is None or val == "NA":
+            return "NA"
+        if isinstance(val, str):
+            return val
+        if not val:
+            return "NA"
+        if dec:
+            return f"{float(val):,.2f}"
+        return format_indian_number(int(val))
+
+    def fpct(val):
+        if not val:
+            return "NA"
+        return f"{float(val)*100:.2f}%"
+
+    # ── Row 0: Title ─────────────────────────────────────────────
+    rows.append(["Form-4: CA Certificate", "", "", ""])
+    style_cmds += [
+        ('SPAN', (0, 0), (3, 0)),
+        ('BACKGROUND', (0, 0), (3, 0), C_TITLE),
+        ('TEXTCOLOR', (0, 0), (3, 0), C_WHITE),
+        ('FONTNAME', (0, 0), (3, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (3, 0), 12),
+        ('ALIGN', (0, 0), (3, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (3, 0), 'MIDDLE'),
     ]
-    
-    cost_table = Table(cost_data, colWidths=[0.5*inch, 3*inch, 1.5*inch, 1.3*inch])
-    cost_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.95, 0.95, 0.95)),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+
+    # ── Row 1: Subtitle ──────────────────────────────────────────
+    rows.append(["(FOR REGISTRATION OF A PROJECT AND SUBSEQUENT WITHDRAWAL OF MONEY)", "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (0, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_TITLE),
+        ('TEXTCOLOR', (0, r), (3, r), C_WHITE),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+    ]
+
+    # ── Row 2: Project info strip ─────────────────────────────────
+    proj_info = (f"Project: {project.get('project_name','—')}   |   RERA No.: {project.get('rera_number','—')}"
+                 f"   |   Period: {quarter} {year}   |   Date: {datetime.now().strftime('%d/%m/%Y')}")
+    rows.append([proj_info, "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (0, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_SECTION),
+        ('FONTSIZE', (0, r), (3, r), 8),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+    ]
+
+    # ── Row 3: Column headers ─────────────────────────────────────
+    rows.append(["Sr No", "Particulars", "Estimated Amount\nin Rs.", "Incurred Amount\nin Rs."])
+    r = r_idx() - 1
+    style_cmds += [
+        ('BACKGROUND', (0, r), (3, r), C_SECTION),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+        ('ROWBACKGROUNDS', (0, r), (3, r), [C_SECTION]),
+    ]
+
+    # ── Section header: Land Cost ──────────────────────────────────
+    rows.append(["", "i.  Land Cost :", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (1, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_SECTION),
+        ('FONTNAME', (1, r), (1, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+    ]
+
+    # ── Land cost sub-items ───────────────────────────────────────
+    def add_item_row(sr, text, est_val, inc_val, bg=None, note=False):
+        r_i = r_idx()
+        rows.append([sr if sr is not None else "1", text,
+                     fv(est_val), fv(inc_val, dec=True)])
+        cmds = [
+            ('FONTSIZE', (0, r_i), (3, r_i), 8),
+            ('ALIGN', (2, r_i), (3, r_i), 'RIGHT'),
+        ]
+        if sr is not None and sr != "":
+            cmds.append(('ALIGN', (0, r_i), (0, r_i), 'CENTER'))
+        if bg:
+            cmds.append(('BACKGROUND', (0, r_i), (3, r_i), bg))
+        if note:
+            cmds.append(('FONTNAME', (0, r_i), (3, r_i), 'Helvetica-Oblique'))
+        style_cmds.extend(cmds)
+
+    add_item_row(1,
+        "a. Acquisition Cost of Land or Development Rights, lease Premium, lease rent, "
+        "interest cost incurred or payable on Land Cost and legal cost.",
+        lc_a_est, lc_a_inc)
+
+    add_item_row("",
+        "b. Amount of Premium payable to obtain development rights, FSI, additional FSI, "
+        "fungible area, and any other incentive under DCR from Local Authority or State "
+        "Government or any Statutory Authority.",
+        lc_b_est, lc_b_inc)
+
+    add_item_row("", "c. Acquisition cost of TDR (if any)", lc_c_est, lc_c_inc)
+
+    add_item_row("",
+        "d. Amounts payable to State Government or competent authority or any other statutory "
+        "authority of the State or Central Government, towards stamp duty, transfer charges, "
+        "registration fees etc; and",
+        lc_d_est, lc_d_inc)
+
+    add_item_row("",
+        "e. Land Premium payable as per annual statement of rates (ASR) for redevelopment "
+        "of land owned by public authorities.",
+        lc_e_est, lc_e_inc)
+
+    # f. Rehabilitation sub-header
+    rows.append(["", "f. Under Rehabilitation Scheme :", "", ""])
+    r = r_idx() - 1
+    style_cmds += [('FONTNAME', (1, r), (1, r), 'Helvetica-Bold'), ('FONTSIZE', (0, r), (3, r), 8)]
+
+    add_item_row("",
+        "   (i) Estimated construction cost of rehab building including site development "
+        "and infrastructure for the same as certified by Engineer.",
+        rehab_i_est if rehab_any else "NA",
+        rehab_i_inc if rehab_any else "NA")
+
+    add_item_row("",
+        "   (ii) Actual Cost of construction of rehab building incurred as per the books "
+        "of accounts as verified by the CA.",
+        "NA",
+        rehab_ii_inc if rehab_any else "NA")
+
+    # Note row
+    rows.append(["", "Note: (for total cost of construction incurred, Minimum of (i) or (ii) is to be considered).",
+                 "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (1, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_NOTE),
+        ('FONTNAME', (1, r), (1, r), 'Helvetica-Oblique'),
+        ('FONTSIZE', (0, r), (3, r), 7),
+    ]
+
+    add_item_row("",
+        "   (iii) Cost towards clearance of land of all or any encumbrances including cost of "
+        "removal of legal/illegal occupants, cost for providing temporary transit accommodation "
+        "or rent in lieu of Transit Accommodation, overhead cost,",
+        "NA", rehab_iii_inc if rehab_any else "NA")
+
+    add_item_row("",
+        "   (iv) Cost of ASR linked premium, fees, charges and security deposits or maintenance "
+        "deposit, or any amount whatsoever payable to any authorities towards and in project of "
+        "rehabilitation.",
+        "NA", rehab_iv_inc if rehab_any else "NA")
+
+    # Land Sub-total
+    rows.append(["", "Sub-Total of LAND COST",
+                 fv(land_sub_est), fv(land_sub_inc, dec=True)])
+    r = r_idx() - 1
+    style_cmds += [
+        ('BACKGROUND', (0, r), (3, r), C_SUBTOT),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+        ('ALIGN', (2, r), (3, r), 'RIGHT'),
+    ]
+
+    # ── Section: Development Cost ─────────────────────────────────
+    rows.append(["", "ii.  Development Cost / Cost of Construction :", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (1, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_SECTION),
+        ('FONTNAME', (1, r), (1, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+    ]
+
+    # a(i) Estimated construction cost
+    add_item_row("",
+        "a. (i) Estimated Cost of Construction as certified by Engineer.",
+        dev_a1_est, "Refer Note")
+
+    # a(ii) Actual construction cost
+    add_item_row("",
+        "   (ii) Actual Cost of construction incurred as per the books of accounts "
+        "as verified by the CA.",
+        "Refer Note", dev_a2_inc)
+
+    # MIN note
+    rows.append(["",
+        "Note: (for adding to total cost of construction incurred, Minimum of (i) or (ii) is to be considered).",
+        "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (1, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_NOTE),
+        ('FONTNAME', (1, r), (1, r), 'Helvetica-Oblique'),
+        ('FONTSIZE', (0, r), (3, r), 7),
+    ]
+
+    # a(iii) On-site expenditure
+    add_item_row("",
+        "(iii) On-site expenditure for development of entire project excluding cost of "
+        "construction as per (i) or (ii) above, i.e. salaries, consultants fees, site "
+        "overheads, development works, cost of services (including water, electricity, "
+        "sewerage, drainage, layout roads etc.), cost of machineries and equipment "
+        "including its hire and maintenance costs, consumables etc.",
+        dev_a3_est, dev_a3_inc)
+
+    # b. Taxes
+    add_item_row("",
+        "b. Payment of Taxes, cess, fees, charges, premiums, interest etc. "
+        "to any statutory Authority.",
+        dev_b_est, dev_b_inc)
+
+    # c. Finance cost
+    add_item_row("",
+        "c. Principal sum and interest payable to financial institutions, scheduled banks, "
+        "non-banking financial institution (NBFC) or money lenders on construction funding "
+        "or money borrowed for construction;",
+        dev_c_est, dev_c_inc)
+
+    # Dev Sub-total
+    rows.append(["", "Sub-Total of Development Cost",
+                 fv(dev_sub_est), fv(dev_sub_inc, dec=True)])
+    r = r_idx() - 1
+    style_cmds += [
+        ('BACKGROUND', (0, r), (3, r), C_SUBTOT),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+        ('ALIGN', (2, r), (3, r), 'RIGHT'),
+    ]
+
+    # ── Summary rows Sr 2-8 ───────────────────────────────────────
+    def add_summary_row(sr, text, est_val, inc_val, net=False):
+        r_i = r_idx()
+        rows.append([str(sr), text, est_val or "", inc_val or ""])
+        bg = C_NET if net else C_SUMMARY
+        style_cmds.extend([
+            ('BACKGROUND', (0, r_i), (3, r_i), bg),
+            ('FONTNAME', (0, r_i), (3, r_i), 'Helvetica-Bold' if net else 'Helvetica'),
+            ('FONTSIZE', (0, r_i), (3, r_i), 8),
+            ('ALIGN', (0, r_i), (0, r_i), 'CENTER'),
+            ('ALIGN', (2, r_i), (3, r_i), 'RIGHT'),
+        ])
+
+    add_summary_row(2,
+        "Total Estimated Cost of the Real Estate Project [1(i) + 1(ii)] of Estimated Column.",
+        fv(total_est), "")
+
+    add_summary_row(3,
+        "Total Cost Incurred of the Real Estate Project [1(i) + 1(ii)] of Incurred Column.",
+        "", fv(total_inc, dec=True))
+
+    add_summary_row(4,
+        "% Completion of Construction Work (as per Project Architect's Certificate)",
+        "", fpct(arch_pct))
+
+    add_summary_row(5,
+        f"Proportion of the Cost incurred on Land Cost and {arch_pct*100:.2f}% "
+        f"Construction Cost to the Total Estimated Cost.  (Sr.3 / Sr.2 %)",
+        "", fpct(proportion))
+
+    add_summary_row(6,
+        "Amount Which can be Withdrawn from the Designated Account. "
+        "(Total Estimated Cost × Proportion of cost incurred  =  Sr.2 × Sr.5)",
+        "", fv(withdraw_allow, dec=True))
+
+    add_summary_row(7,
+        "Less: Amount Withdrawn till date of this certificate as per the "
+        "Books of Accounts and Bank Statement.",
+        "", fv(withdrawn_td, dec=True))
+
+    add_summary_row(8,
+        "Net Amount which can be Withdrawn from the Designated Bank Account "
+        "under this Certificate.",
+        "", fv(net_withdraw, dec=True), net=True)
+
+    # ── Signature block 1 ─────────────────────────────────────────
+    cert_text = (f"This certificate is being issued for RERA compliance for the Company "
+                 f"[{project.get('promoter_name', 'Promoter')}] and is based on the records "
+                 f"and documents produced before me and explanations provided to me by the "
+                 f"management of the Company.")
+    rows.append([cert_text, "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [('SPAN', (0, r), (3, r)), ('FONTSIZE', (0, r), (3, r), 8)]
+
+    for sig_line in ["Yours Faithfully,",
+                     f"Signature of Chartered Accountant – {project.get('ca_name', '')}",
+                     f"(Membership No.: {project.get('ca_membership', '…………')})",
+                     "______________________", "Name"]:
+        rows.append(["", "", sig_line, ""])
+        r = r_idx() - 1
+        style_cmds += [
+            ('SPAN', (2, r), (3, r)),
+            ('ALIGN', (2, r), (3, r), 'CENTER'),
+            ('FONTSIZE', (0, r), (3, r), 8),
+        ]
+
+    # ── Additional Information header ─────────────────────────────
+    rows.append(["(ADDITIONAL INFORMATION FOR ONGOING PROJECTS)", "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (0, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_TITLE),
+        ('TEXTCOLOR', (0, r), (3, r), C_WHITE),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 10),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+    ]
+
+    # ── Additional info rows ──────────────────────────────────────
+    def add_addl_row(sr, text, est_val, inc_val):
+        r_i = r_idx()
+        rows.append([str(sr) if sr is not None else "", text, est_val or "", inc_val or ""])
+        style_cmds.extend([
+            ('FONTSIZE', (0, r_i), (3, r_i), 8),
+            ('ALIGN', (0, r_i), (0, r_i), 'CENTER'),
+            ('ALIGN', (2, r_i), (3, r_i), 'RIGHT'),
+        ])
+
+    add_addl_row(1,
+        "Estimated Balance Cost to Complete the Real Estate Project "
+        "(Difference of Total Estimated Project cost less Cost incurred) (calculated as per Form IV)",
+        "", fv(bal_cost, dec=True))
+
+    add_addl_row(2,
+        "Balance amount of receivables from sold apartments as per Annexure A to this certificate "
+        "(as certified by Chartered Accountant as verified from the records and books of Accounts)",
+        "", fv(bal_recv_sold, dec=True) if bal_recv_sold else "NIL")
+
+    add_addl_row(3,
+        "(i) Balance Unsold area (to be certified by Management and to be verified "
+        "by CA from the records and books of accounts)",
+        "", f"{unsold_area:,.2f} sq.m." if unsold_area else "NIL")
+
+    add_addl_row(None,
+        "(ii) Estimated amount of sales proceeds in respect of unsold apartments "
+        "(calculated as per ASR multiplied to unsold area on the date of certificate, "
+        "to be calculated by CA) as per Annexure A to this certificate",
+        "", fv(unsold_val, dec=True) if unsold_val else "NIL")
+
+    add_addl_row(4, "Estimated receivables of ongoing project.  Sum of  2 + 3(ii)",
+                 "", fv(total_recv, dec=True) if total_recv else "NIL")
+
+    add_addl_row(5, "Amount to be deposited in Designated Account – 70% or 100%", "", "")
+
+    # 70% / 100% deposit rows
+    if total_recv > bal_cost:
+        dep_text = (f"IF Sr.4 is GREATER THAN Sr.1: 70% × Rs.{format_indian_number(int(total_recv))} "
+                    f"= Rs.{format_indian_number(int(deposit_amt))}")
+    else:
+        dep_text = (f"IF Sr.4 is LESSER THAN or EQUAL TO Sr.1: 100% × Rs.{format_indian_number(int(total_recv))} "
+                    f"= Rs.{format_indian_number(int(deposit_amt))}")
+    r_i = r_idx()
+    rows.append(["", dep_text, "", ""])
+    style_cmds += [('SPAN', (0, r_i), (3, r_i)), ('FONTSIZE', (0, r_i), (3, r_i), 8),
+                   ('FONTNAME', (0, r_i), (3, r_i), 'Helvetica-Bold')]
+
+    # ── Signature block 2 ─────────────────────────────────────────
+    rows.append([cert_text, "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [('SPAN', (0, r), (3, r)), ('FONTSIZE', (0, r), (3, r), 8)]
+
+    for sig_line in ["Yours Faithfully,",
+                     "Signature of Chartered Accountant,",
+                     f"(Membership No.: {project.get('ca_membership', '…………')})",
+                     "______________________", "Name"]:
+        rows.append(["", "", sig_line, ""])
+        r = r_idx() - 1
+        style_cmds += [
+            ('SPAN', (2, r), (3, r)),
+            ('ALIGN', (2, r), (3, r), 'CENTER'),
+            ('FONTSIZE', (0, r), (3, r), 8),
+        ]
+
+    # ── Annexure A header ─────────────────────────────────────────
+    rows.append(["Annexure A", "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (0, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_TITLE),
+        ('TEXTCOLOR', (0, r), (3, r), C_WHITE),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 12),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+    ]
+
+    rows.append(["Statement for calculation of Receivables from the Sales of the Ongoing Real Estate Project",
+                 "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (0, r), (3, r)),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+    ]
+
+    # Sold inventory header
+    rows.append(["Sold Inventory", "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('SPAN', (0, r), (3, r)),
+        ('BACKGROUND', (0, r), (3, r), C_SECTION),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 9),
+    ]
+
+    # Column headers for Annexure A
+    rows.append(["Sr No", "Flat No.", "Received Amount (Rs.)", "Balance Receivable (Rs.)"])
+    r = r_idx() - 1
+    style_cmds += [
+        ('BACKGROUND', (0, r), (3, r), C_SECTION),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 8),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+    ]
+
+    sold_sales = [s for s in (sales or []) if s.get("buyer_name")]
+    bmap = {b.get("building_id"): b.get("building_name", "") for b in (buildings or [])}
+    total_recv_amt = 0; total_bal_recv = 0
+
+    if sold_sales:
+        for idx, s in enumerate(sold_sales, 1):
+            bname = bmap.get(s.get("building_id"), s.get("building_name", ""))
+            unit  = f"{bname} – {s.get('unit_number','')}" if bname else s.get("unit_number", "")
+            recv  = s.get("amount_received", 0)
+            bal   = s.get("sale_value", 0) - recv
+            total_recv_amt += recv; total_bal_recv += bal
+            r_i = r_idx()
+            rows.append([str(idx), unit, fv(recv, dec=True), fv(bal, dec=True)])
+            style_cmds += [('FONTSIZE', (0, r_i), (3, r_i), 8), ('ALIGN', (2, r_i), (3, r_i), 'RIGHT'),
+                           ('ALIGN', (0, r_i), (0, r_i), 'CENTER')]
+    else:
+        for i in range(1, 4):
+            r_i = r_idx()
+            rows.append([str(i), "", "", ""])
+            style_cmds += [('FONTSIZE', (0, r_i), (3, r_i), 8)]
+
+    # Total row
+    rows.append(["", "Total", fv(total_recv_amt, dec=True), fv(total_bal_recv, dec=True)])
+    r = r_idx() - 1
+    style_cmds += [
+        ('BACKGROUND', (0, r), (3, r), C_SUBTOT),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 8),
+        ('ALIGN', (2, r), (3, r), 'RIGHT'),
+    ]
+
+    # Unsold Inventory valuation box
+    unsold_box = (
+        f"(Unsold Inventory Valuation)\n"
+        f"Ready Reckoner Rate: Rs. {format_indian_number(int(asr_rate)) if asr_rate else '___'} per sq.m.\n"
+        f"Total Unsold Area: {unsold_area:,.2f} sq.m.\n"
+        f"Estimated Unsold Inventory Value: Rs. {format_indian_number(int(unsold_val)) if unsold_val else 'NIL'}"
+    )
+    rows.append([unsold_box, "", "", ""])
+    r = r_idx() - 1
+    style_cmds += [('SPAN', (0, r), (3, r)), ('FONTSIZE', (0, r), (3, r), 8)]
+
+    # Unsold unit header
+    rows.append(["Sr No", "Flat Number", "Area (sq.m.)", "Estimated Value (Rs.)"])
+    r = r_idx() - 1
+    style_cmds += [
+        ('BACKGROUND', (0, r), (3, r), C_SECTION),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 8),
+        ('ALIGN', (0, r), (3, r), 'CENTER'),
+    ]
+
+    unsold_sales = [s for s in (sales or []) if not s.get("buyer_name")]
+    total_unsold_area = 0; total_unsold_val = 0
+    if unsold_sales:
+        for idx, s in enumerate(unsold_sales, 1):
+            area = s.get("carpet_area", 0)
+            uval = (area or 0) * (asr_rate or 0)
+            total_unsold_area += (area or 0); total_unsold_val += uval
+            bname = bmap.get(s.get("building_id"), s.get("building_name", ""))
+            unit  = f"{bname} – {s.get('unit_number','')}" if bname else s.get("unit_number", "")
+            r_i = r_idx()
+            rows.append([str(idx), unit, f"{area:,.2f}" if area else "", fv(uval, dec=True)])
+            style_cmds += [('FONTSIZE', (0, r_i), (3, r_i), 8), ('ALIGN', (2, r_i), (3, r_i), 'RIGHT'),
+                           ('ALIGN', (0, r_i), (0, r_i), 'CENTER')]
+    else:
+        for i in range(1, 4):
+            r_i = r_idx()
+            rows.append([str(i), "", "", ""])
+            style_cmds += [('FONTSIZE', (0, r_i), (3, r_i), 8)]
+
+    # Unsold total row
+    rows.append(["", "Total",
+                 f"{total_unsold_area:,.2f}" if total_unsold_area else "",
+                 fv(total_unsold_val, dec=True) if total_unsold_val else ""])
+    r = r_idx() - 1
+    style_cmds += [
+        ('BACKGROUND', (0, r), (3, r), C_SUBTOT),
+        ('FONTNAME', (0, r), (3, r), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, r), (3, r), 8),
+        ('ALIGN', (2, r), (3, r), 'RIGHT'),
+    ]
+
+    # ── Global table style ────────────────────────────────────────
+    n_rows = len(rows)
+    style_cmds += [
+        ('GRID', (0, 0), (-1, -1), 0.4, C_BLACK),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(cost_table)
-    elements.append(Spacer(1, 20))
-    
-    # Bank Account Details
-    elements.append(Paragraph("<b>DESIGNATED BANK ACCOUNT DETAILS</b>", HEADER_STYLE))
-    elements.append(Spacer(1, 8))
-    
-    bank_data = [
-        ["Bank Name:", project.get('designated_bank_name', '________________________')],
-        ["Account Number:", project.get('designated_account_number', '________________________')],
-        ["IFSC Code:", project.get('designated_ifsc_code', '________________________')],
-        ["Branch:", project.get('designated_bank_name', '________________________')],
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('WORDWRAP', (0, 0), (-1, -1), True),
     ]
-    
-    bank_table = Table(bank_data, colWidths=[1.5*inch, 4*inch])
-    bank_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]))
-    elements.append(bank_table)
-    elements.append(Spacer(1, 25))
-    
-    # Closing
-    elements.append(Paragraph("<b>Yours Faithfully,</b>", BODY_STYLE))
-    elements.append(Spacer(1, 30))
-    
-    # Signature block
-    sig_data = [
-        ["_______________________________", ""],
-        ["Signature & Name of Chartered Accountant", ""],
-        [f"Name: {project.get('ca_name', '________________________')}", ""],
-        [f"Membership No.: {project.get('ca_membership_number', '________________________')}", ""],
-        [f"Firm Registration No.: {project.get('ca_firm_name', '________________________')}", ""],
-    ]
-    sig_table = Table(sig_data, colWidths=[4*inch, 2*inch])
-    sig_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-    ]))
-    elements.append(sig_table)
-    
+
+    main_table = Table(rows, colWidths=CW, repeatRows=4)
+    main_table.setStyle(TableStyle(style_cmds))
+    elements.append(main_table)
+
     doc.build(elements)
     buffer.seek(0)
     return buffer

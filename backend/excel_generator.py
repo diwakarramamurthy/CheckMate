@@ -485,12 +485,11 @@ _RUPEE_D  = '[>=10000000]##\\,##\\,##\\,##0.00;[>=100000]##\\,##\\,##0.00;##\\,#
 _PCT_FMT  = '0.00%'
 
 
-def generate_form4_excel(project, project_cost, estimated_dev_cost,
-                         financial_summary, sales, buildings,
-                         construction_progress, quarter, year):
+def generate_form4_excel(project, form4_data, quarter, year):
     """
     Form-4: CA Certificate – official format matching RERA CA Certificate template.
     Columns: A=Sr No, B=Particulars, C=Estimated Amount (Rs.), D=Incurred Amount (Rs.)
+    form4_data is a pre-computed dict from server._build_form4_data().
     """
     wb = Workbook()
     ws = wb.active
@@ -502,113 +501,46 @@ def generate_form4_excel(project, project_cost, estimated_dev_cost,
     ws.column_dimensions["C"].width = 22
     ws.column_dimensions["D"].width = 22
 
-    pc   = project_cost or {}
-    est  = estimated_dev_cost or {}
-    fs   = financial_summary or {}
+    fd = form4_data or {}
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # DERIVE VALUES FROM PROJECT DATA
-    # ─────────────────────────────────────────────────────────────────────────
+    # Unpack all pre-computed values
+    lc_a_est      = fd.get("lc_a_est", 0);    lc_a_inc      = fd.get("lc_a_inc", 0)
+    lc_b_est      = fd.get("lc_b_est", 0);    lc_b_inc      = fd.get("lc_b_inc", 0)
+    lc_c_est      = fd.get("lc_c_est", 0);    lc_c_inc      = fd.get("lc_c_inc", 0)
+    lc_d_est      = fd.get("lc_d_est", 0);    lc_d_inc      = fd.get("lc_d_inc", 0)
+    lc_e_est      = fd.get("lc_e_est", 0);    lc_e_inc      = fd.get("lc_e_inc", 0)
+    rehab_i_est   = fd.get("rehab_i_est", 0); rehab_i_inc   = fd.get("rehab_i_inc", 0)
+    rehab_ii_inc  = fd.get("rehab_ii_inc", 0)
+    rehab_iii_inc = fd.get("rehab_iii_inc", 0)
+    rehab_iv_inc  = fd.get("rehab_iv_inc", 0)
+    rehab_any     = fd.get("rehab_any", False)
+    land_sub_est  = fd.get("land_sub_est", 0); land_sub_inc  = fd.get("land_sub_inc", 0)
 
-    # ── LAND COST sub-items ──────────────────────────────────────────
-    # a. Acquisition / development rights / legal / interest
-    lc_a_est = pc.get("land_acquisition_estimated", 0)
-    lc_a_inc = (pc.get("land_acquisition_cost", 0) +
-                pc.get("land_legal_cost", 0) +
-                pc.get("land_interest_cost", 0))
+    dev_a1_est    = fd.get("dev_a1_est", 0)
+    dev_a2_inc    = fd.get("dev_a2_inc", 0)
+    dev_a3_est    = fd.get("dev_a3_est", 0);   dev_a3_inc    = fd.get("dev_a3_inc", 0)
+    dev_b_est     = fd.get("dev_b_est", 0);    dev_b_inc     = fd.get("dev_b_inc", 0)
+    dev_c_est     = fd.get("dev_c_est", 0);    dev_c_inc     = fd.get("dev_c_inc", 0)
+    dev_sub_est   = fd.get("dev_sub_est", 0);  dev_sub_inc   = fd.get("dev_sub_inc", 0)
 
-    # b. Development rights premium (FSI/FAR/fungible area)
-    lc_b_est = pc.get("development_rights_estimated", 0)
-    lc_b_inc = pc.get("development_rights_premium", 0)
+    total_est     = fd.get("total_est", 0);    total_inc     = fd.get("total_inc", 0)
+    arch_pct      = fd.get("arch_pct", 0)
+    proportion    = fd.get("proportion", 0)
+    withdraw_allow = fd.get("withdraw_allow", 0)
+    withdrawn_td  = fd.get("withdrawn_td", 0)
+    net_withdraw  = fd.get("net_withdraw", 0)
 
-    # c. TDR cost
-    lc_c_est = pc.get("tdr_estimated", 0)
-    lc_c_inc = pc.get("tdr_cost", 0)
-
-    # d. Stamp duty / transfer charges / registration fees
-    lc_d_est = pc.get("stamp_duty_estimated", 0) + pc.get("government_charges_estimated", 0)
-    lc_d_inc = pc.get("stamp_duty", 0) + pc.get("government_charges", 0)
-
-    # e. Land premium (ASR-linked redevelopment)
-    lc_e_est = pc.get("land_premium_estimated", 0)
-    lc_e_inc = pc.get("land_premium_redevelopment", 0)
-
-    # f. Rehabilitation scheme sub-items
-    rehab_i_est  = pc.get("rehab_construction_estimated", 0)
-    rehab_i_inc  = pc.get("rehab_construction_cost", 0)        # (i) est construction cost
-    rehab_ii_inc = pc.get("rehab_construction_cost", 0)        # (ii) actual (same field)
-    rehab_iii_inc = (pc.get("rehab_clearance_cost", 0) +       # (iii) clearance + transit
-                     pc.get("rehab_transit_accommodation", 0))
-    rehab_iv_inc  = pc.get("rehab_asr_premium", 0)             # (iv) ASR linked premium
-    rehab_any     = any([rehab_i_inc, rehab_iii_inc, rehab_iv_inc])
-
-    # Sub-total Land Cost
-    land_sub_est = lc_a_est + lc_b_est + lc_c_est + lc_d_est + lc_e_est + rehab_i_est
-    land_sub_inc = lc_a_inc + lc_b_inc + lc_c_inc + lc_d_inc + lc_e_inc
-    if rehab_any:
-        # Use minimum of (i) and (ii) for rehab construction
-        land_sub_inc += min(rehab_i_inc, rehab_ii_inc) + rehab_iii_inc + rehab_iv_inc
-
-    # ── DEVELOPMENT / CONSTRUCTION COST sub-items ────────────────────
-    # a(i)  Estimated construction cost by Engineer
-    dev_a1_est = pc.get("construction_cost_estimated", est.get("buildings_cost", 0))
-
-    # a(ii) Actual construction cost (books of accounts / CA-verified)
-    dev_a2_inc = pc.get("construction_cost_actual", 0)
-
-    # a(iii) On-site expenditure (salaries, consultants, overheads, services, machinery…)
-    dev_a3_est = (est.get("infrastructure_cost", 0) +
-                  est.get("consultants_fee", 0) +
-                  est.get("machinery_cost", 0))
-    dev_a3_inc = (pc.get("onsite_salaries", 0) +
-                  pc.get("onsite_consultants_fees", 0) +
-                  pc.get("onsite_site_overheads", 0) +
-                  pc.get("onsite_services_cost", 0) +
-                  pc.get("onsite_machinery_equipment", 0) +
-                  pc.get("onsite_consumables", 0) +
-                  pc.get("offsite_expenditure", 0))
-
-    # b. Taxes, cess, fees, charges, premiums to statutory authority
-    dev_b_est = pc.get("taxes_statutory_estimated", 0)
-    dev_b_inc = pc.get("taxes_statutory", 0)
-
-    # c. Finance cost (loans, interest on construction)
-    dev_c_est = pc.get("finance_cost_estimated", 0)
-    dev_c_inc = pc.get("finance_cost", 0)
-
-    # Sub-total Development Cost
-    # Estimated: construction_est + on_site_est + taxes_est + finance_est
-    dev_sub_est = dev_a1_est + dev_a3_est + dev_b_est + dev_c_est
-    # Incurred: MIN(estimated, actual) construction + on_site + taxes + finance
-    dev_sub_inc = (min(dev_a1_est, dev_a2_inc) if dev_a1_est and dev_a2_inc
-                   else (dev_a2_inc or dev_a1_est)) + dev_a3_inc + dev_b_inc + dev_c_inc
-
-    # ── SUMMARY CALCULATIONS ─────────────────────────────────────────
-    total_est = land_sub_est + dev_sub_est
-    total_inc = land_sub_inc + dev_sub_inc
-
-    # % Completion from Architect's Certificate (average across all buildings)
-    if construction_progress:
-        comps = [p.get("overall_completion", 0) for p in construction_progress if isinstance(p, dict)]
-        arch_pct = (sum(comps) / len(comps) / 100) if comps else 0
-    else:
-        arch_pct = 0
-
-    proportion     = (total_inc / total_est) if total_est else 0
-    withdraw_allow = total_est * proportion          # = total_inc (by definition)
-    withdrawn_td   = fs.get("total_amount_withdrawn_till_date",
-                             pc.get("total_amount_withdrawn_till_date", 0))
-    net_withdraw   = withdraw_allow - withdrawn_td
-
-    # ── ADDITIONAL INFO (ongoing projects) ───────────────────────────
-    bal_cost     = total_est - total_inc
-    bal_recv_sold = fs.get("total_balance_receivable_sold", 0)
-    unsold_area  = fs.get("unsold_area_sqm", 0)
-    asr_rate     = fs.get("asr_rate_per_sqm", 0)
-    unsold_val   = fs.get("unsold_inventory_value", unsold_area * asr_rate)
-    total_recv   = fs.get("total_estimated_receivables", bal_recv_sold + unsold_val)
-    deposit_pct  = 0.70 if total_recv > bal_cost else 1.00
-    deposit_amt  = total_recv * deposit_pct
+    bal_cost      = fd.get("bal_cost", 0)
+    bal_recv_sold = fd.get("bal_recv_sold", 0)
+    unsold_area   = fd.get("unsold_area", 0)
+    asr_rate      = fd.get("asr_rate", 0)
+    unsold_val    = fd.get("unsold_val", 0)
+    total_recv    = fd.get("total_recv", 0)
+    deposit_pct   = fd.get("deposit_pct", 0.70)
+    deposit_amt   = fd.get("deposit_amt", 0)
+    sales         = fd.get("sales", [])
+    buildings     = fd.get("buildings", [])
+    building_map  = fd.get("building_map", {})
 
     # ─────────────────────────────────────────────────────────────────────────
     # BUILD WORKSHEET

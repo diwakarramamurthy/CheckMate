@@ -2030,6 +2030,183 @@ async def _compute_cost_summary(project_id: str):
     }
 
 
+async def _build_form4_data(
+    project_id: str, quarter: str, year: int,
+    buildings: list, construction_progress: list,
+    project_cost: dict, sales: list
+) -> dict:
+    """
+    Pre-compute every value needed by the Form-4 CA Certificate report.
+    Fetches land_costs, site_expenditure, infrastructure collections in-place.
+    Returns a flat dict consumed by all three report generators (Excel/PDF/DOCX).
+    """
+    pc = project_cost or {}
+
+    # ── LAND COSTS (land_costs collection) ──────────────────────────────────
+    land_doc    = await db.land_costs.find_one({"project_id": project_id}, {"_id": 0}) or {}
+    land_est    = land_doc.get("estimated", {})
+    land_inc    = land_doc.get("actual",    {})
+
+    lc_a_est = land_est.get("land_cost", 0)
+    lc_a_inc = land_inc.get("land_cost", 0)
+    lc_b_est = land_est.get("premium_cost", 0)
+    lc_b_inc = land_inc.get("premium_cost", 0)
+    lc_c_est = land_est.get("tdr_cost", 0)
+    lc_c_inc = land_inc.get("tdr_cost", 0)
+    lc_d_est = land_est.get("statutory_cost", 0)
+    lc_d_inc = land_inc.get("statutory_cost", 0)
+    lc_e_est = land_est.get("land_premium", 0)
+    lc_e_inc = land_inc.get("land_premium", 0)
+
+    rehab_i_est   = land_est.get("estimated_rehab_cost", 0)
+    rehab_i_inc   = land_inc.get("estimated_rehab_cost", 0)
+    rehab_ii_inc  = land_inc.get("actual_rehab_cost", 0)
+    rehab_iii_inc = land_inc.get("land_clearance_cost", 0)
+    rehab_iv_inc  = land_inc.get("asr_linked_premium", 0)
+    rehab_any     = any([rehab_i_inc, rehab_ii_inc, rehab_iii_inc, rehab_iv_inc])
+
+    land_sub_est = lc_a_est + lc_b_est + lc_c_est + lc_d_est + lc_e_est + rehab_i_est
+    land_sub_inc = lc_a_inc + lc_b_inc + lc_c_inc + lc_d_inc + lc_e_inc
+    if rehab_any:
+        land_sub_inc += min(rehab_i_inc, rehab_ii_inc) + rehab_iii_inc + rehab_iv_inc
+
+    # ── DEVELOPMENT / CONSTRUCTION COSTS ────────────────────────────────────
+    # a(i)  Estimated construction cost = sum of building estimated costs
+    dev_a1_est = sum(b.get("estimated_cost", 0) for b in (buildings or []))
+
+    # a(ii) Actual construction cost = Σ(building_est_cost × completion%)
+    prog_map   = {p.get("building_id"): p.get("overall_completion", 0)
+                  for p in (construction_progress or [])}
+    dev_a2_inc = sum(
+        b.get("estimated_cost", 0) * prog_map.get(b.get("building_id"), 0) / 100
+        for b in (buildings or [])
+    )
+
+    # a(iii) On-site expenditure
+    #   Estimated: infrastructure_costs + site_expenditure (salaries, consultants, etc.)
+    infra_doc  = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0}) or {}
+    infra_est  = infra_doc.get("total_infrastructure_cost", 0)
+
+    site_exp_doc = await db.site_expenditure.find_one({"project_id": project_id}, {"_id": 0}) or {}
+    site_exp_est = (
+        (site_exp_doc.get("site_development_cost", 0) or 0) +
+        (site_exp_doc.get("salaries",              0) or 0) +
+        (site_exp_doc.get("consultants_fee",       0) or 0) +
+        (site_exp_doc.get("site_overheads",        0) or 0) +
+        (site_exp_doc.get("services_cost",         0) or 0) +
+        (site_exp_doc.get("machinery_cost",        0) or 0)
+    )
+    dev_a3_est = infra_est + site_exp_est
+
+    #   Incurred: infrastructure (est × completion%) + actual_site_expenditure
+    infra_prog_doc = await db.infrastructure_progress.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    ) or {}
+    infra_completion = infra_prog_doc.get("overall_completion", 0)
+    infra_inc        = infra_est * infra_completion / 100
+
+    act_site_doc = await db.actual_site_expenditure.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    ) or {}
+    dev_a3_inc = infra_inc + act_site_doc.get("total", 0)
+
+    # b. Taxes, cess, fees to statutory authority
+    est_dev_doc = await db.estimated_development_costs.find_one(
+        {"project_id": project_id}, {"_id": 0}
+    ) or {}
+    dev_b_est = est_dev_doc.get("taxes_premiums_fees", 0)
+    dev_b_inc = pc.get("taxes_statutory", 0)
+
+    # c. Finance cost
+    dev_c_est = est_dev_doc.get("finance_cost", 0)
+    dev_c_inc = pc.get("finance_cost", 0)
+
+    # Sub-totals
+    dev_sub_est  = dev_a1_est + dev_a3_est + dev_b_est + dev_c_est
+    dev_a_for_min = min(dev_a1_est, dev_a2_inc) if dev_a1_est and dev_a2_inc else (dev_a2_inc or 0)
+    dev_sub_inc  = dev_a_for_min + dev_a3_inc + dev_b_inc + dev_c_inc
+
+    # ── SUMMARY CALCULATIONS ─────────────────────────────────────────────────
+    total_est      = land_sub_est + dev_sub_est
+    total_inc      = land_sub_inc + dev_sub_inc
+
+    # % Completion = actual construction cost / estimated construction cost
+    arch_pct       = (dev_a2_inc / dev_a1_est) if dev_a1_est else 0
+
+    proportion     = (total_inc / total_est) if total_est else 0
+    withdraw_allow = total_inc   # same as total_est * proportion by definition
+    withdrawn_td   = pc.get("total_amount_withdrawn_till_date", 0)
+    net_withdraw   = withdraw_allow - withdrawn_td
+
+    # ── ADDITIONAL INFORMATION (ongoing projects) ────────────────────────────
+    bal_cost      = total_est - total_inc
+
+    # Financial summary (receivables & unsold)
+    fs = await db.financial_summaries.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    )
+    if not fs:
+        fs = await db.financial_summaries.find_one(
+            {"project_id": project_id}, {"_id": 0},
+            sort=[("year", -1), ("quarter", -1)]
+        )
+    fs = fs or {}
+
+    bal_recv_sold = fs.get("total_balance_receivable_sold", 0)
+    unsold_area   = fs.get("unsold_area_sqm", 0)
+    asr_rate      = fs.get("asr_rate_per_sqm", 0)
+    unsold_val    = fs.get("unsold_inventory_value", unsold_area * asr_rate)
+    total_recv    = fs.get("total_estimated_receivables", bal_recv_sold + unsold_val)
+    deposit_pct   = 0.70 if total_recv > bal_cost else 1.00
+    deposit_amt   = total_recv * deposit_pct
+
+    building_map  = {b.get("building_id"): b.get("building_name", "") for b in (buildings or [])}
+
+    return {
+        # Land cost items
+        "lc_a_est": lc_a_est, "lc_a_inc": lc_a_inc,
+        "lc_b_est": lc_b_est, "lc_b_inc": lc_b_inc,
+        "lc_c_est": lc_c_est, "lc_c_inc": lc_c_inc,
+        "lc_d_est": lc_d_est, "lc_d_inc": lc_d_inc,
+        "lc_e_est": lc_e_est, "lc_e_inc": lc_e_inc,
+        "rehab_i_est": rehab_i_est, "rehab_i_inc": rehab_i_inc,
+        "rehab_ii_inc": rehab_ii_inc,
+        "rehab_iii_inc": rehab_iii_inc,
+        "rehab_iv_inc": rehab_iv_inc,
+        "rehab_any": rehab_any,
+        "land_sub_est": land_sub_est, "land_sub_inc": land_sub_inc,
+        # Development cost items
+        "dev_a1_est": dev_a1_est,
+        "dev_a2_inc": dev_a2_inc,
+        "dev_a3_est": dev_a3_est,
+        "dev_a3_inc": dev_a3_inc,
+        "dev_b_est": dev_b_est, "dev_b_inc": dev_b_inc,
+        "dev_c_est": dev_c_est, "dev_c_inc": dev_c_inc,
+        "dev_sub_est": dev_sub_est, "dev_sub_inc": dev_sub_inc,
+        # Summary
+        "total_est": round(total_est, 2),
+        "total_inc": round(total_inc, 2),
+        "arch_pct": arch_pct,
+        "proportion": proportion,
+        "withdraw_allow": round(withdraw_allow, 2),
+        "withdrawn_td": round(withdrawn_td, 2),
+        "net_withdraw": round(net_withdraw, 2),
+        # Additional info
+        "bal_cost": round(bal_cost, 2),
+        "bal_recv_sold": bal_recv_sold,
+        "unsold_area": unsold_area,
+        "asr_rate": asr_rate,
+        "unsold_val": unsold_val,
+        "total_recv": total_recv,
+        "deposit_pct": deposit_pct,
+        "deposit_amt": deposit_amt,
+        # For Annexure A
+        "sales": sales or [],
+        "buildings": buildings or [],
+        "building_map": building_map,
+    }
+
+
 @api_router.get("/project-costs/live-summary/{project_id}")
 async def get_project_cost_live_summary(
     project_id: str, current_user: dict = Depends(get_current_user)
@@ -2890,10 +3067,12 @@ async def generate_pdf_report(
             filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
             
         elif report_type == "form-4":
-            pdf_buffer = generate_form4_pdf(
-                project, project_cost, estimated_dev_cost, quarter, year
+            form4_data = await _build_form4_data(
+                project_id, quarter, year,
+                buildings, construction_progress, project_cost, sales
             )
-            filename = f"Form4_Project_Cost_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
+            pdf_buffer = generate_form4_pdf(project, form4_data, quarter, year)
+            filename = f"Form4_CA_Certificate_{project.get('project_name', 'Project')}_{quarter}_{year}.pdf"
             
         elif report_type == "annexure-a":
             pdf_buffer = generate_annexure_a_pdf(
@@ -2976,22 +3155,11 @@ async def generate_excel_report(
             buf = generate_form3_excel(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year)
             filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
         elif report_type == "form-4":
-            # Fetch financial summary for withdrawal & receivables data
-            financial_summary_f4 = await db.financial_summaries.find_one(
-                {"project_id": project_id, "quarter": quarter, "year": year},
-                {"_id": 0}
+            form4_data = await _build_form4_data(
+                project_id, quarter, year,
+                buildings, construction_progress, project_cost, sales
             )
-            if not financial_summary_f4:
-                financial_summary_f4 = await db.financial_summaries.find_one(
-                    {"project_id": project_id},
-                    {"_id": 0},
-                    sort=[("year", -1), ("quarter", -1)]
-                )
-            buf = generate_form4_excel(
-                project, project_cost, estimated_dev_cost,
-                financial_summary_f4, sales, buildings,
-                construction_progress, quarter, year
-            )
+            buf = generate_form4_excel(project, form4_data, quarter, year)
             filename = f"Form4_CA_Certificate_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
         elif report_type == "annexure-a":
             buf = generate_annexure_a_excel(project, sales, buildings, quarter, year)
@@ -3062,8 +3230,12 @@ async def generate_docx_report(
             buf = generate_form3_docx(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year)
             filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
         elif report_type == "form-4":
-            buf = generate_form4_docx(project, project_cost, estimated_dev_cost, quarter, year)
-            filename = f"Form4_Project_Cost_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
+            form4_data = await _build_form4_data(
+                project_id, quarter, year,
+                buildings, construction_progress, project_cost, sales
+            )
+            buf = generate_form4_docx(project, form4_data, quarter, year)
+            filename = f"Form4_CA_Certificate_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
         elif report_type == "annexure-a":
             buf = generate_annexure_a_docx(project, sales, buildings, quarter, year)
             filename = f"AnnexureA_Sales_{project.get('project_name', 'Project')}_{quarter}_{year}.docx"
