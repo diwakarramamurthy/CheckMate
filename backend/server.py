@@ -1911,6 +1911,108 @@ async def get_latest_infrastructure_progress(project_id: str, current_user: dict
 # PROJECT COST ROUTES (FORM-4 CA Certificate)
 # =========================
 
+async def _compute_cost_summary(project_id: str):
+    """
+    Compute Estimated Cost, Cost Incurred, and Balance Cost using exactly
+    the same logic as the Project Costs page frontend, for the latest
+    available quarter.  This is the single source of truth used by both
+    the dashboard and the /project-costs/live-summary endpoint.
+    """
+    # ── Determine latest quarter ────────────────────────────────────────
+    latest_cost_rec = await db.project_costs.find_one(
+        {"project_id": project_id}, {"_id": 0}, sort=[("year", -1), ("quarter", -1)]
+    )
+    latest_progress_rec = await db.construction_progress.find_one(
+        {"project_id": project_id}, {"_id": 0}, sort=[("year", -1), ("quarter", -1)]
+    )
+    if latest_cost_rec:
+        quarter = latest_cost_rec.get("quarter", "Q1")
+        year    = latest_cost_rec.get("year", datetime.now().year)
+    elif latest_progress_rec:
+        quarter = latest_progress_rec.get("quarter", "Q1")
+        year    = latest_progress_rec.get("year", datetime.now().year)
+    else:
+        quarter = "Q1"
+        year    = datetime.now().year
+
+    # ── 1. Land costs ────────────────────────────────────────────────────
+    land_doc = await db.land_costs.find_one({"project_id": project_id}, {"_id": 0})
+    estimated_land = land_doc.get("estimated", {}).get("total", 0) if land_doc else 0
+    actual_land    = land_doc.get("actual",    {}).get("total", 0) if land_doc else 0
+
+    # ── 2. Estimated development cost ────────────────────────────────────
+    est_dev_doc = await db.estimated_development_costs.find_one(
+        {"project_id": project_id}, {"_id": 0}
+    )
+    estimated_dev = est_dev_doc.get("total_estimated_development_cost", 0) if est_dev_doc else 0
+
+    # ── 3. Actual construction cost = Σ(building estimated_cost × completion%) ──
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
+    construction_progress = await db.construction_progress.find(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    ).to_list(1000)
+    progress_map = {p.get("building_id"): p.get("overall_completion", 0) for p in construction_progress}
+    actual_construction = sum(
+        b.get("estimated_cost", 0) * progress_map.get(b.get("building_id"), 0) / 100
+        for b in buildings
+    )
+
+    # ── 4. Actual infrastructure cost = infra_total × infra_completion% ──
+    infra_cost_doc = await db.infrastructure_costs.find_one(
+        {"project_id": project_id}, {"_id": 0}
+    )
+    total_infra_cost = infra_cost_doc.get("total_infrastructure_cost", 0) if infra_cost_doc else 0
+    infra_progress_doc = await db.infrastructure_progress.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    )
+    infra_completion    = infra_progress_doc.get("overall_completion", 0) if infra_progress_doc else 0
+    actual_infrastructure = total_infra_cost * infra_completion / 100
+
+    # ── 5. Actual site expenditure for the latest quarter ────────────────
+    site_exp_doc = await db.actual_site_expenditure.find_one(
+        {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
+    )
+    actual_site_exp = site_exp_doc.get("total", 0) if site_exp_doc else 0
+
+    # ── 6. Taxes & finance (user-entered on Project Costs page) ──────────
+    taxes_finance = 0
+    if latest_cost_rec:
+        taxes_finance = (
+            latest_cost_rec.get("taxes_statutory", 0) +
+            latest_cost_rec.get("finance_cost", 0)
+        )
+
+    # ── Totals (mirrors frontend Project Costs page exactly) ─────────────
+    total_estimated = estimated_land + estimated_dev
+    total_dev_cost  = actual_construction + actual_infrastructure + actual_site_exp + taxes_finance
+    total_incurred  = actual_land + total_dev_cost
+    balance_cost    = total_estimated - total_incurred
+
+    return {
+        "total_estimated_cost": round(total_estimated, 2),
+        "total_cost_incurred":  round(total_incurred,  2),
+        "balance_cost":         round(balance_cost,    2),
+        "latest_quarter": quarter,
+        "latest_year":    year,
+        # Breakdown for transparency
+        "estimated_land":         round(estimated_land,         2),
+        "estimated_dev":          round(estimated_dev,          2),
+        "actual_land":            round(actual_land,            2),
+        "actual_construction":    round(actual_construction,    2),
+        "actual_infrastructure":  round(actual_infrastructure,  2),
+        "actual_site_exp":        round(actual_site_exp,        2),
+        "taxes_finance":          round(taxes_finance,          2),
+    }
+
+
+@api_router.get("/project-costs/live-summary/{project_id}")
+async def get_project_cost_live_summary(
+    project_id: str, current_user: dict = Depends(get_current_user)
+):
+    """Return cost totals computed the same way as the Project Costs page."""
+    return await _compute_cost_summary(project_id)
+
+
 @api_router.post("/project-costs", response_model=ProjectCostResponse)
 async def create_project_cost(cost: ProjectCostCreate, current_user: dict = Depends(get_current_user)):
     # Calculate Land Cost totals (Section 1.i in Form-4)
@@ -2454,18 +2556,8 @@ async def get_sales_template():
 
 @api_router.get("/dashboard/{project_id}", response_model=DashboardSummary)
 async def get_dashboard(project_id: str, current_user: dict = Depends(get_current_user)):
-    # Get latest project cost record (used as fallback for taxes/finance)
-    cost = await db.project_costs.find_one(
-        {"project_id": project_id},
-        {"_id": 0},
-        sort=[("year", -1), ("quarter", -1)]
-    )
-
-    # Fetch authoritative cost source collections
-    land_cost_doc = await db.land_costs.find_one({"project_id": project_id}, {"_id": 0})
-    est_dev_cost_doc = await db.estimated_development_costs.find_one({"project_id": project_id}, {"_id": 0})
-    # Sum site expenditure across ALL quarters (cumulative cost incurred)
-    all_site_exp = await db.actual_site_expenditure.find({"project_id": project_id}, {"_id": 0}).to_list(100)
+    # Cost summary – computed via shared helper (same logic as Project Costs page)
+    cost_summary = await _compute_cost_summary(project_id)
 
     # Get all unit sales
     sales = await db.unit_sales.find({"project_id": project_id}, {"_id": 0}).to_list(10000)
@@ -2515,47 +2607,10 @@ async def get_dashboard(project_id: str, current_user: dict = Depends(get_curren
     else:
         overall_completion = 0
     
-    # ── COST DATA ──────────────────────────────────────────────────────────────
-    # ESTIMATED COST: read from authoritative source collections.
-    # Land (estimated) from land_costs collection
-    estimated_land = land_cost_doc.get("estimated", {}).get("total", 0) if land_cost_doc else 0
-    # Development (estimated) from estimated_development_costs collection
-    estimated_dev = est_dev_cost_doc.get("total_estimated_development_cost", 0) if est_dev_cost_doc else 0
-    total_estimated = estimated_land + estimated_dev
-    # Fallback to project_costs record if source collections are empty
-    if total_estimated == 0 and cost:
-        total_estimated = cost.get("total_estimated_cost", 0)
-
-    # COST INCURRED: computed from source collections (same logic as ProjectCostsPage).
-    # 1. Actual land cost
-    actual_land = land_cost_doc.get("actual", {}).get("total", 0) if land_cost_doc else 0
-
-    # 2. Actual construction cost = Σ (building estimated_cost × completion %)
-    #    Use latest progress entry per building (progress_list is already newest-first)
-    latest_building_progress = {}
-    for p in progress_list:
-        bid = p.get("building_id")
-        if bid not in latest_building_progress:
-            latest_building_progress[bid] = p.get("overall_completion", 0)
-    actual_construction = sum(
-        b.get("estimated_cost", 0) * latest_building_progress.get(b.get("building_id"), 0) / 100
-        for b in buildings
-    )
-
-    # 3. Actual site expenditure – sum ALL quarters cumulatively
-    actual_site_exp_total = sum(e.get("total", 0) for e in all_site_exp)
-
-    # 4. Taxes & finance from the latest project_costs entry (user-entered)
-    actual_taxes_finance = (
-        cost.get("taxes_statutory", 0) + cost.get("finance_cost", 0)
-    ) if cost else 0
-
-    cost_incurred = actual_land + actual_construction + actual_site_exp_total + actual_taxes_finance
-    # Fallback to project_costs if all sources are empty
-    if cost_incurred == 0 and cost:
-        cost_incurred = cost.get("total_cost_incurred", 0)
-
-    balance_cost = total_estimated - cost_incurred
+    # ── COST DATA (from shared helper – same logic as Project Costs page) ───
+    total_estimated = cost_summary["total_estimated_cost"]
+    cost_incurred   = cost_summary["total_cost_incurred"]
+    balance_cost    = cost_summary["balance_cost"]
     
     # RERA deposit calculation (Form-5 logic)
     if balance_cost > 0 and receivables > 0:
