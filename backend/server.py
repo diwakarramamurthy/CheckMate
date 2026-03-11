@@ -2976,8 +2976,23 @@ async def generate_excel_report(
             buf = generate_form3_excel(project, buildings, construction_progress, infrastructure_progress, estimated_dev_cost, quarter, year)
             filename = f"Form3_Cost_Incurred_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
         elif report_type == "form-4":
-            buf = generate_form4_excel(project, project_cost, estimated_dev_cost, quarter, year)
-            filename = f"Form4_Project_Cost_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
+            # Fetch financial summary for withdrawal & receivables data
+            financial_summary_f4 = await db.financial_summaries.find_one(
+                {"project_id": project_id, "quarter": quarter, "year": year},
+                {"_id": 0}
+            )
+            if not financial_summary_f4:
+                financial_summary_f4 = await db.financial_summaries.find_one(
+                    {"project_id": project_id},
+                    {"_id": 0},
+                    sort=[("year", -1), ("quarter", -1)]
+                )
+            buf = generate_form4_excel(
+                project, project_cost, estimated_dev_cost,
+                financial_summary_f4, sales, buildings,
+                construction_progress, quarter, year
+            )
+            filename = f"Form4_CA_Certificate_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"
         elif report_type == "annexure-a":
             buf = generate_annexure_a_excel(project, sales, buildings, quarter, year)
             filename = f"AnnexureA_Sales_{project.get('project_name', 'Project')}_{quarter}_{year}.xlsx"

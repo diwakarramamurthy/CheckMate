@@ -421,113 +421,771 @@ def generate_form3_excel(project, buildings, construction_progress, infrastructu
 
 
 # ─── FORM 4 ──────────────────────────────────────────────────────────────────
+# Helper styles specific to Form-4 (CA Certificate official format)
 
-def generate_form4_excel(project, project_cost, estimated_dev_cost, quarter, year):
+F4_TITLE_FILL   = PatternFill(start_color="1F3864", end_color="1F3864", fill_type="solid")
+F4_SECTION_FILL = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+F4_SUBTOT_FILL  = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+F4_SUMMARY_FILL = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+F4_NET_FILL     = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+F4_NOTE_FILL    = PatternFill(start_color="FFFACD", end_color="FFFACD", fill_type="solid")
+
+THIN_ALL = Border(
+    left=Side(style="thin"), right=Side(style="thin"),
+    top=Side(style="thin"),  bottom=Side(style="thin"),
+)
+
+
+def _f4_cell(ws, addr, value, bold=False, size=9, color="000000",
+             h="left", v="center", wrap=True, number_fmt=None, fill=None):
+    """Write a single cell for Form-4 with consistent styling."""
+    c = ws[addr] if isinstance(addr, str) else addr
+    c.value = value
+    c.font = Font(name="Arial", size=size, bold=bold, color=color)
+    c.alignment = Alignment(horizontal=h, vertical=v, wrap_text=wrap)
+    c.border = THIN_ALL
+    if number_fmt:
+        c.number_format = number_fmt
+    if fill:
+        c.fill = fill
+
+
+def _f4_merge(ws, rng, value, bold=False, size=9, color="000000",
+              h="left", v="center", wrap=True, fill=None):
+    """Merge a range and write a single styled cell."""
+    ws.merge_cells(rng)
+    top_left = rng.split(":")[0]
+    _f4_cell(ws, top_left, value, bold=bold, size=size, color=color,
+             h=h, v=v, wrap=wrap, fill=fill)
+    # Apply border to all cells in the merged range
+    from openpyxl.utils import range_boundaries
+    min_col, min_row, max_col, max_row = range_boundaries(rng)
+    for r in range(min_row, max_row + 1):
+        for cl in range(min_col, max_col + 1):
+            ws.cell(row=r, column=cl).border = THIN_ALL
+
+
+def _na_or_num(val):
+    """Return 'NA' if value is 0/None, else the numeric value (int if whole)."""
+    if not val:
+        return "NA"
+    return int(val) if val == int(val) else val
+
+
+def _fmt_num(val):
+    """Return formatted Indian number string, or 'NA' if zero."""
+    if not val:
+        return "NA"
+    return format_indian_number(int(val))
+
+
+# Indian rupee formats for openpyxl cells
+_RUPEE    = '[>=10000000]##\\,##\\,##\\,##0;[>=100000]##\\,##\\,##0;##\\,##0'
+_RUPEE_D  = '[>=10000000]##\\,##\\,##\\,##0.00;[>=100000]##\\,##\\,##0.00;##\\,##0.00'
+_PCT_FMT  = '0.00%'
+
+
+def generate_form4_excel(project, project_cost, estimated_dev_cost,
+                         financial_summary, sales, buildings,
+                         construction_progress, quarter, year):
+    """
+    Form-4: CA Certificate – official format matching RERA CA Certificate template.
+    Columns: A=Sr No, B=Particulars, C=Estimated Amount (Rs.), D=Incurred Amount (Rs.)
+    """
     wb = Workbook()
     ws = wb.active
-    ws.title = "Form 4 - Project Cost"
+    ws.title = "Form-4 CA Certificate"
 
-    ws.merge_cells("A1:E1")
-    title_cell(ws["A1"], "The Goa Real Estate (Regulation and Development) Rules 2017")
-    ws.row_dimensions[1].height = 28
-    ws.merge_cells("A2:E2")
-    title_cell(ws["A2"], "FORM 4 — CHARTERED ACCOUNTANT'S CERTIFICATE")
-    ws.row_dimensions[2].height = 24
-    ws.merge_cells("A3:E3")
-    ws["A3"].value = "(Project Cost Statement)"
-    ws["A3"].font = Font(italic=True, size=10, color="FFFFFF")
-    ws["A3"].fill = TITLE_FILL
-    ws["A3"].alignment = Alignment(horizontal="center")
+    # ── Column widths ─────────────────────────────────────────────────────────
+    ws.column_dimensions["A"].width = 7
+    ws.column_dimensions["B"].width = 78
+    ws.column_dimensions["C"].width = 22
+    ws.column_dimensions["D"].width = 22
 
-    info = [
-        ("Project Name:", project.get("project_name", "")),
-        ("RERA No.:", project.get("rera_number", "")),
-        ("Report Period:", f"{quarter} {year}"),
-        ("Report Date:", datetime.now().strftime("%d/%m/%Y")),
-        ("CA Name:", project.get("ca_name", "")),
-        ("Membership No.:", project.get("ca_membership", "")),
-        ("Firm Registration No.:", project.get("ca_firm_reg", "")),
-    ]
-    for i, (lbl, val) in enumerate(info, 5):
-        ws.merge_cells(f"A{i}:B{i}")
-        label_cell(ws[f"A{i}"], lbl)
-        ws.merge_cells(f"C{i}:E{i}")
-        value_cell(ws[f"C{i}"], val)
+    pc   = project_cost or {}
+    est  = estimated_dev_cost or {}
+    fs   = financial_summary or {}
 
-    row = 13
-    ws.merge_cells(f"A{row}:E{row}")
-    section_cell(ws[f"A{row}"], "PROJECT COST STATEMENT")
-    ws.row_dimensions[row].height = 22
-    row += 1
+    # ─────────────────────────────────────────────────────────────────────────
+    # DERIVE VALUES FROM PROJECT DATA
+    # ─────────────────────────────────────────────────────────────────────────
 
-    for c, h in enumerate(["Sr.", "Particulars", "Estimated Cost (₹)", "Actual Cost (₹)", "Variance (₹)"], 1):
-        header_cell(ws.cell(row=row, column=c), h)
-    ws.row_dimensions[row].height = 28
-    row += 1
+    # ── LAND COST sub-items ──────────────────────────────────────────
+    # a. Acquisition / development rights / legal / interest
+    lc_a_est = pc.get("land_acquisition_estimated", 0)
+    lc_a_inc = (pc.get("land_acquisition_cost", 0) +
+                pc.get("land_legal_cost", 0) +
+                pc.get("land_interest_cost", 0))
 
-    est_c = estimated_dev_cost or {}
-    pc    = project_cost or {}
+    # b. Development rights premium (FSI/FAR/fungible area)
+    lc_b_est = pc.get("development_rights_estimated", 0)
+    lc_b_inc = pc.get("development_rights_premium", 0)
 
-    # Estimated costs
-    land_cost_est    = pc.get("total_land_cost_estimated", pc.get("land_acquisition_estimated", 0))
-    building_cost_est = est_c.get("buildings_cost", est_c.get("total_building_cost", 0))
-    infra_cost_est   = est_c.get("infrastructure_cost", 0)
-    other_cost_est   = est_c.get("consultants_fee", 0) + est_c.get("machinery_cost", est_c.get("other_costs", 0))
-    total_est        = land_cost_est + building_cost_est + infra_cost_est + other_cost_est
+    # c. TDR cost
+    lc_c_est = pc.get("tdr_estimated", 0)
+    lc_c_inc = pc.get("tdr_cost", 0)
 
-    # Actual costs from project_cost (CA-entered financial data)
-    land_cost_act    = pc.get("total_land_cost", 0)
-    building_cost_act = pc.get("construction_cost_actual", 0)
-    infra_cost_act   = pc.get("onsite_services_cost", pc.get("infrastructure_cost", 0))
-    other_cost_act   = pc.get("taxes_statutory", 0) + pc.get("finance_cost", 0)
-    total_act        = pc.get("total_cost_incurred", land_cost_act + building_cost_act + infra_cost_act + other_cost_act)
+    # d. Stamp duty / transfer charges / registration fees
+    lc_d_est = pc.get("stamp_duty_estimated", 0) + pc.get("government_charges_estimated", 0)
+    lc_d_inc = pc.get("stamp_duty", 0) + pc.get("government_charges", 0)
 
-    rows_data = [
-        (1, "Cost of Land",                                 land_cost_est,    land_cost_act),
-        (2, "Cost of Construction of Buildings",             building_cost_est, building_cost_act),
-        (3, "Cost of Development Works (Infrastructure)",    infra_cost_est,   infra_cost_act),
-        (4, "Administrative & Other Costs (Taxes, Finance)", other_cost_est,   other_cost_act),
-    ]
+    # e. Land premium (ASR-linked redevelopment)
+    lc_e_est = pc.get("land_premium_estimated", 0)
+    lc_e_inc = pc.get("land_premium_redevelopment", 0)
 
-    for sr_no, desc, est, act in rows_data:
-        data_cell(ws.cell(row=row, column=1), str(sr_no), align="center")
-        data_cell(ws.cell(row=row, column=2), desc)
-        data_cell(ws.cell(row=row, column=3), format_indian_number(est), align="right")
-        data_cell(ws.cell(row=row, column=4), format_indian_number(act) if act else "—", align="right")
-        variance = est - act if act else 0
-        data_cell(ws.cell(row=row, column=5), format_indian_number(variance) if act else "—", align="right")
-        row += 1
+    # f. Rehabilitation scheme sub-items
+    rehab_i_est  = pc.get("rehab_construction_estimated", 0)
+    rehab_i_inc  = pc.get("rehab_construction_cost", 0)        # (i) est construction cost
+    rehab_ii_inc = pc.get("rehab_construction_cost", 0)        # (ii) actual (same field)
+    rehab_iii_inc = (pc.get("rehab_clearance_cost", 0) +       # (iii) clearance + transit
+                     pc.get("rehab_transit_accommodation", 0))
+    rehab_iv_inc  = pc.get("rehab_asr_premium", 0)             # (iv) ASR linked premium
+    rehab_any     = any([rehab_i_inc, rehab_iii_inc, rehab_iv_inc])
 
-    for c in range(1, 6):
-        total_cell(ws.cell(row=row, column=c), "")
-    total_cell(ws.cell(row=row, column=2), "TOTAL PROJECT COST", align="center")
-    total_cell(ws.cell(row=row, column=3), format_indian_number(total_est), align="right")
-    total_cell(ws.cell(row=row, column=4), format_indian_number(total_act) if total_act else "—", align="right")
-    total_cell(ws.cell(row=row, column=5), format_indian_number(total_est - total_act) if total_act else "—", align="right")
-    row += 2
+    # Sub-total Land Cost
+    land_sub_est = lc_a_est + lc_b_est + lc_c_est + lc_d_est + lc_e_est + rehab_i_est
+    land_sub_inc = lc_a_inc + lc_b_inc + lc_c_inc + lc_d_inc + lc_e_inc
+    if rehab_any:
+        # Use minimum of (i) and (ii) for rehab construction
+        land_sub_inc += min(rehab_i_inc, rehab_ii_inc) + rehab_iii_inc + rehab_iv_inc
 
-    # Bank Details
-    ws.merge_cells(f"A{row}:E{row}")
-    section_cell(ws[f"A{row}"], "DESIGNATED BANK ACCOUNT DETAILS")
-    ws.row_dimensions[row].height = 22
-    row += 1
+    # ── DEVELOPMENT / CONSTRUCTION COST sub-items ────────────────────
+    # a(i)  Estimated construction cost by Engineer
+    dev_a1_est = pc.get("construction_cost_estimated", est.get("buildings_cost", 0))
 
-    for lbl, val in [
-        ("Bank Name:", project.get("bank_name", "—")),
-        ("Account Number:", project.get("bank_account_number", "—")),
-        ("IFSC Code:", project.get("bank_ifsc", "—")),
-        ("Branch:", project.get("designated_bank_name", "—")),
-    ]:
-        ws.merge_cells(f"A{row}:B{row}")
-        label_cell(ws[f"A{row}"], lbl)
-        ws.merge_cells(f"C{row}:E{row}")
-        value_cell(ws[f"C{row}"], val or "—")
-        row += 1
+    # a(ii) Actual construction cost (books of accounts / CA-verified)
+    dev_a2_inc = pc.get("construction_cost_actual", 0)
 
-    ws.column_dimensions["A"].width = 6
-    ws.column_dimensions["B"].width = 38
-    for col in ["C", "D", "E"]:
-        ws.column_dimensions[col].width = 22
+    # a(iii) On-site expenditure (salaries, consultants, overheads, services, machinery…)
+    dev_a3_est = (est.get("infrastructure_cost", 0) +
+                  est.get("consultants_fee", 0) +
+                  est.get("machinery_cost", 0))
+    dev_a3_inc = (pc.get("onsite_salaries", 0) +
+                  pc.get("onsite_consultants_fees", 0) +
+                  pc.get("onsite_site_overheads", 0) +
+                  pc.get("onsite_services_cost", 0) +
+                  pc.get("onsite_machinery_equipment", 0) +
+                  pc.get("onsite_consumables", 0) +
+                  pc.get("offsite_expenditure", 0))
+
+    # b. Taxes, cess, fees, charges, premiums to statutory authority
+    dev_b_est = pc.get("taxes_statutory_estimated", 0)
+    dev_b_inc = pc.get("taxes_statutory", 0)
+
+    # c. Finance cost (loans, interest on construction)
+    dev_c_est = pc.get("finance_cost_estimated", 0)
+    dev_c_inc = pc.get("finance_cost", 0)
+
+    # Sub-total Development Cost
+    # Estimated: construction_est + on_site_est + taxes_est + finance_est
+    dev_sub_est = dev_a1_est + dev_a3_est + dev_b_est + dev_c_est
+    # Incurred: MIN(estimated, actual) construction + on_site + taxes + finance
+    dev_sub_inc = (min(dev_a1_est, dev_a2_inc) if dev_a1_est and dev_a2_inc
+                   else (dev_a2_inc or dev_a1_est)) + dev_a3_inc + dev_b_inc + dev_c_inc
+
+    # ── SUMMARY CALCULATIONS ─────────────────────────────────────────
+    total_est = land_sub_est + dev_sub_est
+    total_inc = land_sub_inc + dev_sub_inc
+
+    # % Completion from Architect's Certificate (average across all buildings)
+    if construction_progress:
+        comps = [p.get("overall_completion", 0) for p in construction_progress if isinstance(p, dict)]
+        arch_pct = (sum(comps) / len(comps) / 100) if comps else 0
+    else:
+        arch_pct = 0
+
+    proportion     = (total_inc / total_est) if total_est else 0
+    withdraw_allow = total_est * proportion          # = total_inc (by definition)
+    withdrawn_td   = fs.get("total_amount_withdrawn_till_date",
+                             pc.get("total_amount_withdrawn_till_date", 0))
+    net_withdraw   = withdraw_allow - withdrawn_td
+
+    # ── ADDITIONAL INFO (ongoing projects) ───────────────────────────
+    bal_cost     = total_est - total_inc
+    bal_recv_sold = fs.get("total_balance_receivable_sold", 0)
+    unsold_area  = fs.get("unsold_area_sqm", 0)
+    asr_rate     = fs.get("asr_rate_per_sqm", 0)
+    unsold_val   = fs.get("unsold_inventory_value", unsold_area * asr_rate)
+    total_recv   = fs.get("total_estimated_receivables", bal_recv_sold + unsold_val)
+    deposit_pct  = 0.70 if total_recv > bal_cost else 1.00
+    deposit_amt  = total_recv * deposit_pct
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # BUILD WORKSHEET
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _row_ht(r, h):
+        ws.row_dimensions[r].height = h
+
+    R = 1   # current row pointer
+
+    # ── TITLE ROWS ──────────────────────────────────────────────────────
+    _row_ht(R, 30)
+    _f4_merge(ws, f"A{R}:D{R}", "Form-4: CA Certificate",
+              bold=True, size=13, h="center", fill=F4_TITLE_FILL, color="FFFFFF")
+    R += 1
+
+    _row_ht(R, 28)
+    _f4_merge(ws, f"A{R}:D{R}",
+              "(FOR REGISTRATION OF A PROJECT AND SUBSEQUENT WITHDRAWAL OF MONEY)",
+              bold=True, size=10, h="center", fill=F4_TITLE_FILL, color="FFFFFF")
+    R += 1
+
+    # Project info strip
+    proj_info = (
+        f"Project: {project.get('project_name', '—')}   |   "
+        f"RERA No.: {project.get('rera_number', '—')}   |   "
+        f"Period: {quarter} {year}   |   Date: {datetime.now().strftime('%d/%m/%Y')}"
+    )
+    _row_ht(R, 20)
+    _f4_merge(ws, f"A{R}:D{R}", proj_info, size=9, h="center", fill=F4_SECTION_FILL)
+    R += 1
+
+    # ── COLUMN HEADER ROW ───────────────────────────────────────────────
+    _row_ht(R, 35)
+    _f4_cell(ws, f"A{R}", "Sr No",  bold=True, size=10, h="center", fill=F4_SECTION_FILL)
+    _f4_cell(ws, f"B{R}", "Particulars", bold=True, size=10, h="center", fill=F4_SECTION_FILL)
+    _f4_cell(ws, f"C{R}", "Estimated Amount in Rs.", bold=True, size=10, h="center", fill=F4_SECTION_FILL)
+    _f4_cell(ws, f"D{R}", "Incurred Amount in Rs.", bold=True, size=10, h="center", fill=F4_SECTION_FILL)
+    R += 1
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SECTION 1 — LAND COST
+    # ─────────────────────────────────────────────────────────────────────────
+    _row_ht(R, 20)
+    _f4_cell(ws, f"A{R}", None, fill=F4_SECTION_FILL)
+    _f4_merge(ws, f"B{R}:D{R}", "i.  Land Cost :", bold=True, size=10, fill=F4_SECTION_FILL)
+    R += 1
+
+    # Helper: write a line-item row
+    def _item(sr, text, c_val, d_val, ht=35, note=False):
+        nonlocal R
+        _row_ht(R, ht)
+        if sr:
+            _f4_cell(ws, f"A{R}", 1, bold=False, size=9, h="center")  # Sr 1 spans land section
+        else:
+            _f4_cell(ws, f"A{R}", None)
+        _f4_cell(ws, f"B{R}", text, size=9, fill=F4_NOTE_FILL if note else None)
+        # C
+        if c_val == "NA":
+            _f4_cell(ws, f"C{R}", "NA", bold=True, h="center", size=9)
+        elif isinstance(c_val, (int, float)) and c_val:
+            _f4_cell(ws, f"C{R}", c_val, bold=True, h="right", size=9, number_fmt=_RUPEE)
+        else:
+            _f4_cell(ws, f"C{R}", "NA", bold=True, h="center", size=9)
+        # D
+        if d_val == "NA":
+            _f4_cell(ws, f"D{R}", "NA", bold=True, h="center", size=9)
+        elif isinstance(d_val, (int, float)) and d_val:
+            _f4_cell(ws, f"D{R}", d_val, bold=True, h="right", size=9, number_fmt=_RUPEE_D)
+        else:
+            _f4_cell(ws, f"D{R}", "NA", bold=True, h="center", size=9)
+        R += 1
+
+    _item(True,
+          "a. Acquisition Cost of Land or Development Rights, lease Premium, lease rent, "
+          "interest cost incurred or payable on Land Cost and legal cost.",
+          lc_a_est, lc_a_inc, ht=45)
+
+    _item(None,
+          "b. Amount of Premium payable to obtain development rights, FSI, additional FSI, "
+          "fungible area, and any other incentive under DCR from Local Authority or State "
+          "Government or any Statutory Authority.",
+          lc_b_est, lc_b_inc, ht=45)
+
+    _item(None, "c. Acquisition cost of TDR (if any)", lc_c_est, lc_c_inc, ht=28)
+
+    _item(None,
+          "d. Amounts payable to State Government or competent authority or any other statutory "
+          "authority of the State or Central Government, towards stamp duty, transfer charges, "
+          "registration fees etc; and",
+          lc_d_est, lc_d_inc, ht=45)
+
+    _item(None,
+          "e. Land Premium payable as per annual statement of rates (ASR) for redevelopment of "
+          "land owned by public authorities.",
+          lc_e_est, lc_e_inc, ht=35)
+
+    # f. Rehabilitation scheme
+    _row_ht(R, 18)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_cell(ws, f"B{R}", "f. Under Rehabilitation Scheme :", bold=True, size=9)
+    _f4_cell(ws, f"C{R}", None); _f4_cell(ws, f"D{R}", None)
+    R += 1
+
+    _item(None,
+          "   (i) Estimated construction cost of rehab building including site development "
+          "and infrastructure for the same as certified by Engineer.",
+          rehab_i_est if rehab_any else "NA",
+          rehab_i_inc if rehab_any else "NA", ht=40)
+
+    _item(None,
+          "   (ii) Actual Cost of construction of rehab building incurred as per the books "
+          "of accounts as verified by the CA.",
+          "NA",
+          rehab_ii_inc if rehab_any else "NA", ht=35)
+
+    # Note row (merged B:D)
+    _row_ht(R, 25)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_merge(ws, f"B{R}:D{R}",
+              "Note : (for total cost of construction incurred, Minimum of (i) or (ii) is to be considered).",
+              size=9, fill=F4_NOTE_FILL)
+    R += 1
+
+    _item(None,
+          "   (iii) Cost towards clearance of land of all or any encumbrances including cost of "
+          "removal of legal/illegal occupants, cost for providing temporary transit accommodation "
+          "or rent in lieu of Transit Accommodation, overhead cost,",
+          "NA", rehab_iii_inc if rehab_any else "NA", ht=55)
+
+    _item(None,
+          "   (iv) Cost of ASR linked premium, fees, charges and security deposits or maintenance "
+          "deposit, or any amount whatsoever payable to any authorities towards and in project of "
+          "rehabilitation.",
+          "NA", rehab_iv_inc if rehab_any else "NA", ht=45)
+
+    # Sub-total Land Cost
+    _row_ht(R, 22)
+    _f4_cell(ws, f"A{R}", None, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"B{R}", "Sub-Total of LAND COST",
+             bold=True, size=10, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"C{R}", land_sub_est if land_sub_est else "NA",
+             bold=True, h="right", size=10,
+             number_fmt=_RUPEE if land_sub_est else None,
+             fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"D{R}", land_sub_inc if land_sub_inc else "NA",
+             bold=True, h="right", size=10,
+             number_fmt=_RUPEE_D if land_sub_inc else None,
+             fill=F4_SUBTOT_FILL)
+    LAND_SUBTOT_ROW = R
+    R += 1
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SECTION 1.ii — DEVELOPMENT / CONSTRUCTION COST
+    # ─────────────────────────────────────────────────────────────────────────
+    _row_ht(R, 20)
+    _f4_cell(ws, f"A{R}", None, fill=F4_SECTION_FILL)
+    _f4_merge(ws, f"B{R}:D{R}", "ii.  Development Cost / Cost of Construction :",
+              bold=True, size=10, fill=F4_SECTION_FILL)
+    R += 1
+
+    _row_ht(R, 30)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_cell(ws, f"B{R}",
+             "a. (i) Estimated Cost of Construction as certified by Engineer.", size=9)
+    _f4_cell(ws, f"C{R}", dev_a1_est if dev_a1_est else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE if dev_a1_est else None)
+    _f4_cell(ws, f"D{R}", "Refer Note", size=9, h="center")
+    CONST_EST_ROW = R
+    R += 1
+
+    _row_ht(R, 30)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_cell(ws, f"B{R}",
+             "   (ii) Actual Cost of construction incurred as per the books of accounts "
+             "as verified by the CA.", size=9)
+    _f4_cell(ws, f"C{R}", "Refer Note", size=9, h="center")
+    _f4_cell(ws, f"D{R}", dev_a2_inc if dev_a2_inc else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE_D if dev_a2_inc else None)
+    CONST_ACT_ROW = R
+    R += 1
+
+    # Note: MIN of (i) or (ii)
+    _row_ht(R, 25)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_merge(ws, f"B{R}:D{R}",
+              "Note : (for adding to total cost of construction incurred, Minimum of (i) or (ii) "
+              "is to be considered).",
+              size=9, fill=F4_NOTE_FILL)
+    R += 1
+
+    # a(iii) On-site expenditure
+    _row_ht(R, 80)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_cell(ws, f"B{R}",
+             "(iii) On-site expenditure for development of entire project excluding cost of "
+             "construction as per (i) or (ii) above, i.e. salaries, consultants fees, site "
+             "overheads, development works, cost of services (including water, electricity, "
+             "sewerage, drainage, layout roads etc.), cost of machineries and equipment "
+             "including its hire and maintenance costs, consumables etc. All costs directly "
+             "incurred to complete the construction of the entire phase of the project registered.",
+             size=9)
+    _f4_cell(ws, f"C{R}", dev_a3_est if dev_a3_est else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE if dev_a3_est else None)
+    _f4_cell(ws, f"D{R}", dev_a3_inc if dev_a3_inc else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE_D if dev_a3_inc else None)
+    R += 1
+
+    # b. Taxes
+    _row_ht(R, 35)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_cell(ws, f"B{R}",
+             "b. Payment of Taxes, cess, fees, charges, premiums, interest etc. "
+             "to any statutory Authority.", size=9)
+    _f4_cell(ws, f"C{R}", dev_b_est if dev_b_est else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE if dev_b_est else None)
+    _f4_cell(ws, f"D{R}", dev_b_inc if dev_b_inc else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE_D if dev_b_inc else None)
+    R += 1
+
+    # c. Finance cost
+    _row_ht(R, 35)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_cell(ws, f"B{R}",
+             "c. Principal sum and interest payable to financial institutions, scheduled banks, "
+             "non-banking financial institution (NBFC) or money lenders on construction funding "
+             "or money borrowed for construction;", size=9)
+    _f4_cell(ws, f"C{R}", dev_c_est if dev_c_est else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE if dev_c_est else None)
+    _f4_cell(ws, f"D{R}", dev_c_inc if dev_c_inc else "NA",
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE_D if dev_c_inc else None)
+    R += 1
+
+    # Sub-total Development Cost
+    _row_ht(R, 22)
+    _f4_cell(ws, f"A{R}", None, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"B{R}", "Sub-Total of Development Cost",
+             bold=True, size=10, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"C{R}", dev_sub_est if dev_sub_est else "NA",
+             bold=True, h="right", size=10,
+             number_fmt=_RUPEE if dev_sub_est else None,
+             fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"D{R}", dev_sub_inc if dev_sub_inc else "NA",
+             bold=True, h="right", size=10,
+             number_fmt=_RUPEE_D if dev_sub_inc else None,
+             fill=F4_SUBTOT_FILL)
+    DEV_SUBTOT_ROW = R
+    R += 1
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SUMMARY ROWS Sr. 2 – 8
+    # ─────────────────────────────────────────────────────────────────────────
+    def _summary_row(sr, text, c_val=None, d_val=None,
+                     c_fmt=_RUPEE, d_fmt=_RUPEE_D, ht=28, net=False):
+        nonlocal R
+        _row_ht(R, ht)
+        bg = F4_NET_FILL if net else F4_SUMMARY_FILL
+        _f4_cell(ws, f"A{R}", sr, bold=net, size=9, h="center", fill=bg)
+        _f4_cell(ws, f"B{R}", text, bold=net, size=9, fill=bg)
+        # C
+        if c_val is not None:
+            _f4_cell(ws, f"C{R}", c_val, bold=True, h="right", size=9,
+                     number_fmt=c_fmt if isinstance(c_val, (int, float)) else None,
+                     fill=bg)
+        else:
+            _f4_cell(ws, f"C{R}", None, fill=bg)
+        # D
+        if d_val is not None:
+            _f4_cell(ws, f"D{R}", d_val, bold=True, h="right", size=9,
+                     number_fmt=d_fmt if isinstance(d_val, (int, float)) else None,
+                     fill=bg)
+        else:
+            _f4_cell(ws, f"D{R}", None, fill=bg)
+        R += 1
+
+    _summary_row(2,
+                 "Total Estimated Cost of the Real Estate Project "
+                 "[1(i) + 1(ii)] of Estimated Column.",
+                 c_val=round(total_est, 2), ht=30)
+
+    _summary_row(3,
+                 "Total Cost Incurred of the Real Estate Project "
+                 "[1(i) + 1(ii)] of Incurred Column.",
+                 d_val=round(total_inc, 2), ht=30)
+
+    _summary_row(4,
+                 "% Completion of Construction Work "
+                 "(as per Project Architect's Certificate)",
+                 d_val=arch_pct, d_fmt=_PCT_FMT, ht=30)
+
+    _summary_row(5,
+                 f"Proportion of the Cost incurred on Land Cost and "
+                 f"{arch_pct*100:.2f}% Construction Cost to the Total Estimated Cost.  ( Sr.3 / Sr.2 %)",
+                 d_val=round(proportion, 10), d_fmt=_PCT_FMT, ht=30)
+
+    _summary_row(6,
+                 "Amount Which can be Withdrawn from the Designated Account.\n"
+                 "(Total Estimated Cost × Proportion of cost incurred  =  Sr.2 × Sr.5)",
+                 d_val=round(withdraw_allow, 2), ht=40)
+
+    _summary_row(7,
+                 "Less: Amount Withdrawn till date of this certificate as per the "
+                 "Books of Accounts and Bank Statement.",
+                 d_val=round(withdrawn_td, 2), ht=35)
+
+    _summary_row(8,
+                 "Net Amount which can be Withdrawn from the Designated Bank Account "
+                 "under this Certificate.",
+                 d_val=round(net_withdraw, 2), ht=30, net=True)
+
+    # ── Signature block 1 ─────────────────────────────────────────────
+    _row_ht(R, 55)
+    _f4_merge(ws, f"A{R}:D{R}",
+              "This certificate is being issued for RERA compliance for the Company "
+              f"[{project.get('promoter_name', 'Promoter')}] and is based on the records "
+              "and documents produced before me and explanations provided to me by the "
+              "management of the Company.",
+              size=9, h="left", v="top")
+    R += 1
+
+    for lbl in ["Yours Faithfully,",
+                f"Signature of Chartered Accountant – {project.get('ca_name', '')}",
+                f"(Membership No.: {project.get('ca_membership', '…………')})",
+                "______________________",
+                "Name"]:
+        _row_ht(R, 18)
+        _f4_cell(ws, f"A{R}", None); _f4_cell(ws, f"B{R}", None)
+        _f4_merge(ws, f"C{R}:D{R}", lbl,
+                  bold=(lbl in ["Yours Faithfully,", "Name"]), size=9, h="center")
+        R += 1
+
+    # Spacer
+    _row_ht(R, 6); ws[f"A{R}"].border = THIN_ALL
+    for col in ["B", "C", "D"]:
+        ws[f"{col}{R}"].border = THIN_ALL
+    R += 1
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ADDITIONAL INFORMATION FOR ONGOING PROJECTS
+    # ─────────────────────────────────────────────────────────────────────────
+    _row_ht(R, 26)
+    _f4_merge(ws, f"A{R}:D{R}",
+              "(ADDITIONAL INFORMATION FOR ONGOING PROJECTS)",
+              bold=True, size=11, h="center", fill=F4_TITLE_FILL, color="FFFFFF")
+    R += 1
+
+    def _add_row(sr, text, c_val=None, d_val=None,
+                 c_fmt=_RUPEE, d_fmt=_RUPEE, ht=35):
+        nonlocal R
+        _row_ht(R, ht)
+        _f4_cell(ws, f"A{R}", sr, size=9, h="center")
+        _f4_cell(ws, f"B{R}", text, size=9)
+        if c_val is not None:
+            cv = c_val
+            _f4_cell(ws, f"C{R}", cv, bold=isinstance(cv,(int,float)),
+                     h="right" if isinstance(cv,(int,float)) else "center",
+                     size=9, number_fmt=c_fmt if isinstance(cv,(int,float)) else None)
+        else:
+            _f4_cell(ws, f"C{R}", None)
+        if d_val is not None:
+            dv = d_val
+            _f4_cell(ws, f"D{R}", dv, bold=isinstance(dv,(int,float)),
+                     h="right" if isinstance(dv,(int,float)) else "center",
+                     size=9, number_fmt=d_fmt if isinstance(dv,(int,float)) else None)
+        else:
+            _f4_cell(ws, f"D{R}", None)
+        R += 1
+
+    _add_row(1,
+             "Estimated Balance Cost to Complete the Real Estate Project\n"
+             "(Difference of Total Estimated Project cost less Cost incurred)\n"
+             "(calculated as per Form IV)",
+             d_val=round(bal_cost, 2), d_fmt=_RUPEE_D, ht=50)
+
+    _add_row(2,
+             "Balance amount of receivables from sold apartments as per Annexure A to this "
+             "certificate (as certified by Chartered Accountant as verified from the records "
+             "and books of Accounts)",
+             d_val=round(bal_recv_sold, 2) if bal_recv_sold else "NIL",
+             d_fmt=_RUPEE if isinstance(bal_recv_sold, (int, float)) and bal_recv_sold else None,
+             ht=45)
+
+    _add_row(3,
+             "(i) Balance Unsold area (to be certified by Management and to be verified "
+             "by CA from the records and books of accounts)",
+             d_val=f"{unsold_area:,.2f} sq.m." if unsold_area else "NIL", ht=30)
+
+    _add_row(None,
+             "(ii) Estimated amount of sales proceeds in respect of unsold apartments "
+             "(calculated as per ASR multiplied to unsold area on the date of certificate, "
+             "to be calculated by CA) as per Annexure A to this certificate",
+             d_val=round(unsold_val, 2) if unsold_val else "NIL",
+             d_fmt=_RUPEE if unsold_val else None, ht=45)
+
+    _add_row(4, "Estimated receivables of ongoing project.  Sum of  2 + 3(ii)",
+             d_val=round(total_recv, 2) if total_recv else "NIL",
+             d_fmt=_RUPEE if total_recv else None, ht=25)
+
+    _add_row(5, "Amount to be deposited in Designated Account – 70% or 100%", ht=20)
+
+    _row_ht(R, 30)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_merge(ws, f"B{R}:C{R}",
+              "IF Sr.4 is GREATER THAN Sr.1 : 70% of the balance receivables of ongoing "
+              "project will be deposited in Designated Account", size=9)
+    dep_show = round(deposit_amt, 2) if total_recv > bal_cost else None
+    _f4_cell(ws, f"D{R}",
+             f"70% × ₹{format_indian_number(int(total_recv))} = ₹{format_indian_number(int(deposit_amt))}"
+             if total_recv > bal_cost else "—",
+             bold=True, h="right", size=9)
+    R += 1
+
+    _row_ht(R, 30)
+    _f4_cell(ws, f"A{R}", None)
+    _f4_merge(ws, f"B{R}:C{R}",
+              "IF Sr.4 is LESSER THAN or EQUAL TO Sr.1 : 100% of the balance receivables "
+              "of ongoing project will be deposited in Designated Account", size=9)
+    _f4_cell(ws, f"D{R}",
+             f"100% × ₹{format_indian_number(int(total_recv))} = ₹{format_indian_number(int(deposit_amt))}"
+             if total_recv <= bal_cost else "—",
+             bold=True, h="right", size=9)
+    R += 1
+
+    # ── Signature block 2 ─────────────────────────────────────────────
+    _row_ht(R, 6)
+    for col in ["A","B","C","D"]: ws[f"{col}{R}"].border = THIN_ALL
+    R += 1
+
+    _row_ht(R, 55)
+    _f4_merge(ws, f"A{R}:D{R}",
+              "This certificate is being issued for RERA compliance for the Company "
+              f"[{project.get('promoter_name', 'Promoter')}] and is based on the records "
+              "and documents produced before me and explanations provided to me by the "
+              "management of the Company.",
+              size=9, h="left", v="top")
+    R += 1
+
+    for lbl in ["Yours Faithfully,",
+                "Signature of Chartered Accountant,",
+                f"(Membership No.: {project.get('ca_membership', '…………')})",
+                "______________________",
+                "Name"]:
+        _row_ht(R, 18)
+        _f4_cell(ws, f"A{R}", None); _f4_cell(ws, f"B{R}", None)
+        _f4_merge(ws, f"C{R}:D{R}", lbl,
+                  bold=(lbl in ["Yours Faithfully,", "Name"]), size=9, h="center")
+        R += 1
+
+    # Spacer
+    _row_ht(R, 6)
+    for col in ["A","B","C","D"]: ws[f"{col}{R}"].border = THIN_ALL
+    R += 1
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ANNEXURE A — Receivables from sold inventory
+    # ─────────────────────────────────────────────────────────────────────────
+    _row_ht(R, 22)
+    _f4_merge(ws, f"A{R}:D{R}", "Annexure A",
+              bold=True, size=12, h="center", fill=F4_TITLE_FILL, color="FFFFFF")
+    R += 1
+
+    _row_ht(R, 18)
+    _f4_merge(ws, f"A{R}:D{R}",
+              "Statement for calculation of Receivables from the Sales of the Ongoing "
+              "Real Estate Project",
+              bold=True, size=10, h="center")
+    R += 1
+
+    # Sold Inventory section
+    _row_ht(R, 18)
+    _f4_merge(ws, f"A{R}:D{R}", "Sold Inventory",
+              bold=True, size=10, fill=F4_SECTION_FILL)
+    R += 1
+
+    # Header
+    _row_ht(R, 28)
+    for col, hdr in [("A","Sr No"), ("B","Flat No."),
+                     ("C","Received Amount (Rs.)"), ("D","Balance Receivable (Rs.)")]:
+        _f4_cell(ws, f"{col}{R}", hdr, bold=True, size=9, h="center",
+                 fill=F4_SECTION_FILL)
+    R += 1
+
+    # Sold rows
+    building_map = {b.get("building_id"): b.get("building_name","") for b in (buildings or [])}
+    sold_sales = [s for s in (sales or []) if s.get("buyer_name")]
+    total_recv_amt  = 0
+    total_bal_recv  = 0
+
+    if sold_sales:
+        for idx, s in enumerate(sold_sales, 1):
+            _row_ht(R, 18)
+            bname = building_map.get(s.get("building_id"), s.get("building_name",""))
+            unit  = f"{bname} – {s.get('unit_number','')}" if bname else s.get("unit_number","")
+            recv  = s.get("amount_received", 0)
+            bal   = s.get("sale_value", 0) - recv
+            total_recv_amt += recv
+            total_bal_recv += bal
+            _f4_cell(ws, f"A{R}", idx, h="center", size=9)
+            _f4_cell(ws, f"B{R}", unit, size=9)
+            _f4_cell(ws, f"C{R}", recv, h="right", size=9, number_fmt=_RUPEE_D)
+            _f4_cell(ws, f"D{R}", bal, h="right", size=9, number_fmt=_RUPEE_D)
+            R += 1
+    else:
+        # placeholder rows
+        for i in range(1, 5):
+            _row_ht(R, 18)
+            _f4_cell(ws, f"A{R}", i, h="center", size=9)
+            for col in ["B","C","D"]: _f4_cell(ws, f"{col}{R}", None)
+            R += 1
+
+    # Total row
+    _row_ht(R, 20)
+    _f4_cell(ws, f"A{R}", None, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"B{R}", "Total", bold=True, size=9, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"C{R}", total_recv_amt if total_recv_amt else None,
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE_D if total_recv_amt else None,
+             fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"D{R}", total_bal_recv if total_bal_recv else None,
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE_D if total_bal_recv else None,
+             fill=F4_SUBTOT_FILL)
+    R += 1
+
+    # Spacer
+    _row_ht(R, 6)
+    for col in ["A","B","C","D"]: ws[f"{col}{R}"].border = THIN_ALL
+    R += 1
+
+    # Unsold Inventory Valuation
+    _row_ht(R, 100)
+    _f4_merge(ws, f"A{R}:D{R}",
+              f"(Unsold Inventory Valuation)\n"
+              f"Ready Reckoner Rate as on the date of Certificate of the "
+              f"Residential/Commercial premises: "
+              f"Rs. {format_indian_number(int(asr_rate)) if asr_rate else '___'} per sq.m.\n"
+              f"Total Unsold Area: {unsold_area:,.2f} sq.m.\n"
+              f"Estimated Unsold Inventory Value: "
+              f"Rs. {format_indian_number(int(unsold_val)) if unsold_val else 'NIL'}",
+              size=9, v="top")
+    R += 1
+
+    # Unsold unit table header
+    _row_ht(R, 28)
+    for col, hdr in [("A","Sr No"), ("B","Flat Number"),
+                     ("C","Area (sq.m.)"), ("D","Estimated Value (Rs.)")]:
+        _f4_cell(ws, f"{col}{R}", hdr, bold=True, size=9, h="center",
+                 fill=F4_SECTION_FILL)
+    R += 1
+
+    unsold_sales = [s for s in (sales or []) if not s.get("buyer_name")]
+    if unsold_sales:
+        for idx, s in enumerate(unsold_sales, 1):
+            _row_ht(R, 18)
+            bname = building_map.get(s.get("building_id"), s.get("building_name",""))
+            unit  = f"{bname} – {s.get('unit_number','')}" if bname else s.get("unit_number","")
+            area  = s.get("carpet_area", 0)
+            val   = area * asr_rate if asr_rate else s.get("sale_value", 0)
+            _f4_cell(ws, f"A{R}", idx, h="center", size=9)
+            _f4_cell(ws, f"B{R}", unit, size=9)
+            _f4_cell(ws, f"C{R}", area, h="right", size=9)
+            _f4_cell(ws, f"D{R}", val, h="right", size=9, number_fmt=_RUPEE_D)
+            R += 1
+    else:
+        for i in range(1, 5):
+            _row_ht(R, 18)
+            _f4_cell(ws, f"A{R}", i, h="center", size=9)
+            for col in ["B","C","D"]: _f4_cell(ws, f"{col}{R}", None)
+            R += 1
 
     buf = BytesIO()
     wb.save(buf)
