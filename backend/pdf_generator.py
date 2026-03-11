@@ -607,7 +607,7 @@ def generate_form4_pdf(project, form4_data, quarter, year):
     arch_pct      = fd.get("arch_pct", 0)
     proportion    = fd.get("proportion", 0)
     withdraw_allow = fd.get("withdraw_allow", 0)
-    withdrawn_td  = fd.get("withdrawn_td", 0)
+    total_amount_received_sold = fd.get("total_amount_received_sold", 0)
     net_withdraw  = fd.get("net_withdraw", 0)
     bal_cost         = fd.get("bal_cost", 0)
     bal_recv_sold    = fd.get("bal_recv_sold", 0)
@@ -943,13 +943,13 @@ def generate_form4_pdf(project, form4_data, quarter, year):
         "", fv(withdraw_allow, dec=True))
 
     add_summary_row(7,
-        "Less: Amount Withdrawn till date of this certificate as per the "
-        "Books of Accounts and Bank Statement.",
-        "", fv(withdrawn_td, dec=True))
+        "Less: Total Sale Amount Received from Sold Units "
+        "(as per Annexure A – sum of amounts received from all sold unit allottees).",
+        "", fv(total_amount_received_sold, dec=True))
 
     add_summary_row(8,
         "Net Amount which can be Withdrawn from the Designated Bank Account "
-        "under this Certificate.",
+        "under this Certificate.  (Sr.6 – Sr.7)",
         "", fv(net_withdraw, dec=True), net=True)
 
     # ── Signature block 1 ─────────────────────────────────────────

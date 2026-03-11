@@ -527,7 +527,7 @@ def generate_form4_excel(project, form4_data, quarter, year):
     arch_pct      = fd.get("arch_pct", 0)
     proportion    = fd.get("proportion", 0)
     withdraw_allow = fd.get("withdraw_allow", 0)
-    withdrawn_td  = fd.get("withdrawn_td", 0)
+    total_amount_received_sold = fd.get("total_amount_received_sold", 0)
     net_withdraw  = fd.get("net_withdraw", 0)
 
     bal_cost      = fd.get("bal_cost", 0)
@@ -852,14 +852,14 @@ def generate_form4_excel(project, form4_data, quarter, year):
                  d_val=round(withdraw_allow, 2), ht=40)
 
     _summary_row(7,
-                 "Less: Amount Withdrawn till date of this certificate as per the "
-                 "Books of Accounts and Bank Statement.",
-                 d_val=round(withdrawn_td, 2), ht=35)
+                 "Less: Total Sale Amount Received from Sold Units "
+                 "(as per Annexure A – sum of amounts received from all sold unit allottees).",
+                 d_val=round(total_amount_received_sold, 2), ht=40)
 
     _summary_row(8,
                  "Net Amount which can be Withdrawn from the Designated Bank Account "
-                 "under this Certificate.",
-                 d_val=round(net_withdraw, 2), ht=30, net=True)
+                 "under this Certificate.  (Sr.6 – Sr.7)",
+                 d_val=round(net_withdraw, 2), ht=35, net=True)
 
     # ── Signature block 1 ─────────────────────────────────────────────
     _row_ht(R, 55)

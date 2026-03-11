@@ -2135,8 +2135,6 @@ async def _build_form4_data(
 
     proportion     = (total_inc / total_est) if total_est else 0
     withdraw_allow = total_inc   # same as total_est * proportion by definition
-    withdrawn_td   = pc.get("total_amount_withdrawn_till_date", 0)
-    net_withdraw   = withdraw_allow - withdrawn_td
 
     # ── ADDITIONAL INFORMATION (ongoing projects) ────────────────────────────
     bal_cost      = total_est - total_inc
@@ -2144,6 +2142,13 @@ async def _build_form4_data(
     # Compute receivables directly from sales data
     sold_sales_list   = [s for s in (sales or []) if s.get("buyer_name")]
     unsold_sales_list = [s for s in (sales or []) if not s.get("buyer_name")]
+
+    # Sr 7: Total Sale Amount Received from Sold Units (sum of amount_received)
+    total_amount_received_sold = sum(
+        (s.get("amount_received", 0) or 0) for s in sold_sales_list
+    )
+    # Sr 8: Net Amount which can be Withdrawn = Sr 6 (withdraw_allow) - Sr 7
+    net_withdraw = withdraw_allow - total_amount_received_sold
 
     # Balance receivable from sold units = sum of (sale_value - amount_received)
     bal_recv_sold = sum(
@@ -2209,7 +2214,7 @@ async def _build_form4_data(
         "arch_pct": arch_pct,
         "proportion": proportion,
         "withdraw_allow": round(withdraw_allow, 2),
-        "withdrawn_td": round(withdrawn_td, 2),
+        "total_amount_received_sold": round(total_amount_received_sold, 2),
         "net_withdraw": round(net_withdraw, 2),
         # Additional info
         "bal_cost": round(bal_cost, 2),
