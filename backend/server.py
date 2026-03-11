@@ -2130,8 +2130,8 @@ async def _build_form4_data(
     total_est      = land_sub_est + dev_sub_est
     total_inc      = land_sub_inc + dev_sub_inc
 
-    # % Completion = actual construction cost / estimated construction cost
-    arch_pct       = (dev_a2_inc / dev_a1_est) if dev_a1_est else 0
+    # % Completion = Total Actual Dev Cost / Total Estimated Dev Cost
+    arch_pct       = (dev_sub_inc / dev_sub_est) if dev_sub_est else 0
 
     proportion     = (total_inc / total_est) if total_est else 0
     withdraw_allow = total_inc   # same as total_est * proportion by definition
@@ -2141,7 +2141,31 @@ async def _build_form4_data(
     # ── ADDITIONAL INFORMATION (ongoing projects) ────────────────────────────
     bal_cost      = total_est - total_inc
 
-    # Financial summary (receivables & unsold)
+    # Compute receivables directly from sales data
+    sold_sales_list   = [s for s in (sales or []) if s.get("buyer_name")]
+    unsold_sales_list = [s for s in (sales or []) if not s.get("buyer_name")]
+
+    # Balance receivable from sold units = sum of (sale_value - amount_received)
+    bal_recv_sold = sum(
+        (s.get("sale_value", 0) or 0) - (s.get("amount_received", 0) or 0)
+        for s in sold_sales_list
+    )
+
+    # Total area of unsold units
+    unsold_area = sum((s.get("carpet_area", 0) or 0) for s in unsold_sales_list)
+
+    # Average sale price per sq.m. from sold units
+    total_sale_val_sold   = sum((s.get("sale_value", 0) or 0)  for s in sold_sales_list)
+    total_carpet_area_sold = sum((s.get("carpet_area", 0) or 0) for s in sold_sales_list)
+    avg_sale_price = (total_sale_val_sold / total_carpet_area_sold) if total_carpet_area_sold else 0
+
+    # Estimated value of unsold units = avg sale price × unsold area
+    unsold_val = avg_sale_price * unsold_area
+
+    # Total estimated receivables = total sale value of sold units + unsold estimated value
+    total_recv = total_sale_val_sold + unsold_val
+
+    # Also keep ASR rate from financial_summaries if available (for display reference)
     fs = await db.financial_summaries.find_one(
         {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
     )
@@ -2151,12 +2175,8 @@ async def _build_form4_data(
             sort=[("year", -1), ("quarter", -1)]
         )
     fs = fs or {}
+    asr_rate = fs.get("asr_rate_per_sqm", 0)
 
-    bal_recv_sold = fs.get("total_balance_receivable_sold", 0)
-    unsold_area   = fs.get("unsold_area_sqm", 0)
-    asr_rate      = fs.get("asr_rate_per_sqm", 0)
-    unsold_val    = fs.get("unsold_inventory_value", unsold_area * asr_rate)
-    total_recv    = fs.get("total_estimated_receivables", bal_recv_sold + unsold_val)
     deposit_pct   = 0.70 if total_recv > bal_cost else 1.00
     deposit_amt   = total_recv * deposit_pct
 
@@ -2193,13 +2213,15 @@ async def _build_form4_data(
         "net_withdraw": round(net_withdraw, 2),
         # Additional info
         "bal_cost": round(bal_cost, 2),
-        "bal_recv_sold": bal_recv_sold,
+        "bal_recv_sold": round(bal_recv_sold, 2),
         "unsold_area": unsold_area,
         "asr_rate": asr_rate,
-        "unsold_val": unsold_val,
-        "total_recv": total_recv,
+        "avg_sale_price": round(avg_sale_price, 2),
+        "total_sale_val_sold": round(total_sale_val_sold, 2),
+        "unsold_val": round(unsold_val, 2),
+        "total_recv": round(total_recv, 2),
         "deposit_pct": deposit_pct,
-        "deposit_amt": deposit_amt,
+        "deposit_amt": round(deposit_amt, 2),
         # For Annexure A
         "sales": sales or [],
         "buildings": buildings or [],

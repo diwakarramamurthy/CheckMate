@@ -536,11 +536,13 @@ def generate_form4_excel(project, form4_data, quarter, year):
     asr_rate      = fd.get("asr_rate", 0)
     unsold_val    = fd.get("unsold_val", 0)
     total_recv    = fd.get("total_recv", 0)
-    deposit_pct   = fd.get("deposit_pct", 0.70)
-    deposit_amt   = fd.get("deposit_amt", 0)
-    sales         = fd.get("sales", [])
-    buildings     = fd.get("buildings", [])
-    building_map  = fd.get("building_map", {})
+    deposit_pct      = fd.get("deposit_pct", 0.70)
+    deposit_amt      = fd.get("deposit_amt", 0)
+    avg_sale_price   = fd.get("avg_sale_price", 0)
+    total_sale_val_sold = fd.get("total_sale_val_sold", 0)
+    sales            = fd.get("sales", [])
+    buildings        = fd.get("buildings", [])
+    building_map     = fd.get("building_map", {})
 
     # ─────────────────────────────────────────────────────────────────────────
     # BUILD WORKSHEET
@@ -928,7 +930,7 @@ def generate_form4_excel(project, form4_data, quarter, year):
              "certificate (as certified by Chartered Accountant as verified from the records "
              "and books of Accounts)",
              d_val=round(bal_recv_sold, 2) if bal_recv_sold else "NIL",
-             d_fmt=_RUPEE if isinstance(bal_recv_sold, (int, float)) and bal_recv_sold else None,
+             d_fmt=_RUPEE_D if isinstance(bal_recv_sold, (int, float)) and bal_recv_sold else None,
              ht=45)
 
     _add_row(3,
@@ -937,15 +939,18 @@ def generate_form4_excel(project, form4_data, quarter, year):
              d_val=f"{unsold_area:,.2f} sq.m." if unsold_area else "NIL", ht=30)
 
     _add_row(None,
-             "(ii) Estimated amount of sales proceeds in respect of unsold apartments "
-             "(calculated as per ASR multiplied to unsold area on the date of certificate, "
-             "to be calculated by CA) as per Annexure A to this certificate",
+             f"(ii) Estimated amount of sales proceeds in respect of unsold apartments "
+             f"(Average Sale Price per sq.m. of sold units: "
+             f"Rs. {format_indian_number(int(avg_sale_price)) if avg_sale_price else '—'} × "
+             f"Total Unsold Area: {unsold_area:,.2f} sq.m.) as per Annexure A to this certificate",
              d_val=round(unsold_val, 2) if unsold_val else "NIL",
-             d_fmt=_RUPEE if unsold_val else None, ht=45)
+             d_fmt=_RUPEE_D if unsold_val else None, ht=50)
 
-    _add_row(4, "Estimated receivables of ongoing project.  Sum of  2 + 3(ii)",
+    _add_row(4, "Estimated receivables of ongoing project.  "
+             "Sum of Total Sale Value of Sold Units + 3(ii)\n"
+             f"(Total Sale Value of Sold Units: Rs. {format_indian_number(int(total_sale_val_sold)) if total_sale_val_sold else '0'})",
              d_val=round(total_recv, 2) if total_recv else "NIL",
-             d_fmt=_RUPEE if total_recv else None, ht=25)
+             d_fmt=_RUPEE_D if total_recv else None, ht=40)
 
     _add_row(5, "Amount to be deposited in Designated Account – 70% or 100%", ht=20)
 
@@ -954,9 +959,8 @@ def generate_form4_excel(project, form4_data, quarter, year):
     _f4_merge(ws, f"B{R}:C{R}",
               "IF Sr.4 is GREATER THAN Sr.1 : 70% of the balance receivables of ongoing "
               "project will be deposited in Designated Account", size=9)
-    dep_show = round(deposit_amt, 2) if total_recv > bal_cost else None
     _f4_cell(ws, f"D{R}",
-             f"70% × ₹{format_indian_number(int(total_recv))} = ₹{format_indian_number(int(deposit_amt))}"
+             f"70% × ₹{format_indian_number(int(total_recv))} = ₹{format_indian_number(int(total_recv * 0.70))}"
              if total_recv > bal_cost else "—",
              bold=True, h="right", size=9)
     R += 1
@@ -967,7 +971,7 @@ def generate_form4_excel(project, form4_data, quarter, year):
               "IF Sr.4 is LESSER THAN or EQUAL TO Sr.1 : 100% of the balance receivables "
               "of ongoing project will be deposited in Designated Account", size=9)
     _f4_cell(ws, f"D{R}",
-             f"100% × ₹{format_indian_number(int(total_recv))} = ₹{format_indian_number(int(deposit_amt))}"
+             f"100% × ₹{format_indian_number(int(total_recv))} = ₹{format_indian_number(int(total_recv))}"
              if total_recv <= bal_cost else "—",
              bold=True, h="right", size=9)
     R += 1
@@ -1082,11 +1086,10 @@ def generate_form4_excel(project, form4_data, quarter, year):
     _row_ht(R, 100)
     _f4_merge(ws, f"A{R}:D{R}",
               f"(Unsold Inventory Valuation)\n"
-              f"Ready Reckoner Rate as on the date of Certificate of the "
-              f"Residential/Commercial premises: "
-              f"Rs. {format_indian_number(int(asr_rate)) if asr_rate else '___'} per sq.m.\n"
+              f"Average Sale Price per sq.m. of Sold Units: "
+              f"Rs. {format_indian_number(int(avg_sale_price)) if avg_sale_price else '—'} per sq.m.\n"
               f"Total Unsold Area: {unsold_area:,.2f} sq.m.\n"
-              f"Estimated Unsold Inventory Value: "
+              f"Estimated Unsold Inventory Value (Avg Price × Unsold Area): "
               f"Rs. {format_indian_number(int(unsold_val)) if unsold_val else 'NIL'}",
               size=9, v="top")
     R += 1
@@ -1100,17 +1103,22 @@ def generate_form4_excel(project, form4_data, quarter, year):
     R += 1
 
     unsold_sales = [s for s in (sales or []) if not s.get("buyer_name")]
+    total_unsold_area = 0
+    total_unsold_val  = 0
     if unsold_sales:
         for idx, s in enumerate(unsold_sales, 1):
             _row_ht(R, 18)
             bname = building_map.get(s.get("building_id"), s.get("building_name",""))
             unit  = f"{bname} – {s.get('unit_number','')}" if bname else s.get("unit_number","")
-            area  = s.get("carpet_area", 0)
-            val   = area * asr_rate if asr_rate else s.get("sale_value", 0)
+            area  = s.get("carpet_area", 0) or 0
+            val   = area * avg_sale_price if avg_sale_price else 0
+            total_unsold_area += area
+            total_unsold_val  += val
             _f4_cell(ws, f"A{R}", idx, h="center", size=9)
             _f4_cell(ws, f"B{R}", unit, size=9)
             _f4_cell(ws, f"C{R}", area, h="right", size=9)
-            _f4_cell(ws, f"D{R}", val, h="right", size=9, number_fmt=_RUPEE_D)
+            _f4_cell(ws, f"D{R}", val if val else None, h="right", size=9,
+                     number_fmt=_RUPEE_D if val else None)
             R += 1
     else:
         for i in range(1, 5):
@@ -1118,6 +1126,18 @@ def generate_form4_excel(project, form4_data, quarter, year):
             _f4_cell(ws, f"A{R}", i, h="center", size=9)
             for col in ["B","C","D"]: _f4_cell(ws, f"{col}{R}", None)
             R += 1
+
+    # Unsold units total row
+    _row_ht(R, 20)
+    _f4_cell(ws, f"A{R}", None, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"B{R}", "Total", bold=True, size=9, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"C{R}", total_unsold_area if total_unsold_area else None,
+             bold=True, h="right", size=9, fill=F4_SUBTOT_FILL)
+    _f4_cell(ws, f"D{R}", total_unsold_val if total_unsold_val else None,
+             bold=True, h="right", size=9,
+             number_fmt=_RUPEE_D if total_unsold_val else None,
+             fill=F4_SUBTOT_FILL)
+    R += 1
 
     buf = BytesIO()
     wb.save(buf)

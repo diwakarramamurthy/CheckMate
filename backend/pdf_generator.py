@@ -609,17 +609,19 @@ def generate_form4_pdf(project, form4_data, quarter, year):
     withdraw_allow = fd.get("withdraw_allow", 0)
     withdrawn_td  = fd.get("withdrawn_td", 0)
     net_withdraw  = fd.get("net_withdraw", 0)
-    bal_cost      = fd.get("bal_cost", 0)
-    bal_recv_sold = fd.get("bal_recv_sold", 0)
-    unsold_area   = fd.get("unsold_area", 0)
-    asr_rate      = fd.get("asr_rate", 0)
-    unsold_val    = fd.get("unsold_val", 0)
-    total_recv    = fd.get("total_recv", 0)
-    deposit_pct   = fd.get("deposit_pct", 0.70)
-    deposit_amt   = fd.get("deposit_amt", 0)
-    sales         = fd.get("sales", [])
-    buildings     = fd.get("buildings", [])
-    building_map  = fd.get("building_map", {})
+    bal_cost         = fd.get("bal_cost", 0)
+    bal_recv_sold    = fd.get("bal_recv_sold", 0)
+    unsold_area      = fd.get("unsold_area", 0)
+    asr_rate         = fd.get("asr_rate", 0)
+    avg_sale_price   = fd.get("avg_sale_price", 0)
+    total_sale_val_sold = fd.get("total_sale_val_sold", 0)
+    unsold_val       = fd.get("unsold_val", 0)
+    total_recv       = fd.get("total_recv", 0)
+    deposit_pct      = fd.get("deposit_pct", 0.70)
+    deposit_amt      = fd.get("deposit_amt", 0)
+    sales            = fd.get("sales", [])
+    buildings        = fd.get("buildings", [])
+    building_map     = fd.get("building_map", {})
 
     # ── Colour helpers ────────────────────────────────────────────────────────
     C_TITLE   = colors.Color(0x1F/255, 0x38/255, 0x64/255)  # dark navy
@@ -1009,23 +1011,26 @@ def generate_form4_pdf(project, form4_data, quarter, year):
         "", f"{unsold_area:,.2f} sq.m." if unsold_area else "NIL")
 
     add_addl_row(None,
-        "(ii) Estimated amount of sales proceeds in respect of unsold apartments "
-        "(calculated as per ASR multiplied to unsold area on the date of certificate, "
-        "to be calculated by CA) as per Annexure A to this certificate",
+        f"(ii) Estimated amount of sales proceeds in respect of unsold apartments "
+        f"(Avg Sale Price per sq.m. of Sold Units: "
+        f"Rs.{format_indian_number(int(avg_sale_price)) if avg_sale_price else '—'} × "
+        f"Unsold Area: {unsold_area:,.2f} sq.m.) as per Annexure A",
         "", fv(unsold_val, dec=True) if unsold_val else "NIL")
 
-    add_addl_row(4, "Estimated receivables of ongoing project.  Sum of  2 + 3(ii)",
-                 "", fv(total_recv, dec=True) if total_recv else "NIL")
+    add_addl_row(4,
+        f"Estimated receivables of ongoing project.  "
+        f"Total Sale Value of Sold Units (Rs.{format_indian_number(int(total_sale_val_sold)) if total_sale_val_sold else '0'}) + 3(ii)",
+        "", fv(total_recv, dec=True) if total_recv else "NIL")
 
     add_addl_row(5, "Amount to be deposited in Designated Account – 70% or 100%", "", "")
 
     # 70% / 100% deposit rows
     if total_recv > bal_cost:
         dep_text = (f"IF Sr.4 is GREATER THAN Sr.1: 70% × Rs.{format_indian_number(int(total_recv))} "
-                    f"= Rs.{format_indian_number(int(deposit_amt))}")
+                    f"= Rs.{format_indian_number(int(total_recv * 0.70))}")
     else:
         dep_text = (f"IF Sr.4 is LESSER THAN or EQUAL TO Sr.1: 100% × Rs.{format_indian_number(int(total_recv))} "
-                    f"= Rs.{format_indian_number(int(deposit_amt))}")
+                    f"= Rs.{format_indian_number(int(total_recv))}")
     r_i = r_idx()
     rows.append(["", dep_text, "", ""])
     style_cmds += [('SPAN', (0, r_i), (3, r_i)), ('FONTSIZE', (0, r_i), (3, r_i), 8),
@@ -1124,9 +1129,11 @@ def generate_form4_pdf(project, form4_data, quarter, year):
     # Unsold Inventory valuation box
     unsold_box = (
         f"(Unsold Inventory Valuation)\n"
-        f"Ready Reckoner Rate: Rs. {format_indian_number(int(asr_rate)) if asr_rate else '___'} per sq.m.\n"
+        f"Average Sale Price per sq.m. of Sold Units: "
+        f"Rs. {format_indian_number(int(avg_sale_price)) if avg_sale_price else '—'} per sq.m.\n"
         f"Total Unsold Area: {unsold_area:,.2f} sq.m.\n"
-        f"Estimated Unsold Inventory Value: Rs. {format_indian_number(int(unsold_val)) if unsold_val else 'NIL'}"
+        f"Estimated Unsold Inventory Value (Avg Price × Unsold Area): "
+        f"Rs. {format_indian_number(int(unsold_val)) if unsold_val else 'NIL'}"
     )
     rows.append([unsold_box, "", "", ""])
     r = r_idx() - 1
@@ -1146,13 +1153,13 @@ def generate_form4_pdf(project, form4_data, quarter, year):
     total_unsold_area = 0; total_unsold_val = 0
     if unsold_sales:
         for idx, s in enumerate(unsold_sales, 1):
-            area = s.get("carpet_area", 0)
-            uval = (area or 0) * (asr_rate or 0)
-            total_unsold_area += (area or 0); total_unsold_val += uval
+            area = s.get("carpet_area", 0) or 0
+            uval = area * avg_sale_price if avg_sale_price else 0
+            total_unsold_area += area; total_unsold_val += uval
             bname = bmap.get(s.get("building_id"), s.get("building_name", ""))
             unit  = f"{bname} – {s.get('unit_number','')}" if bname else s.get("unit_number", "")
             r_i = r_idx()
-            rows.append([str(idx), unit, f"{area:,.2f}" if area else "", fv(uval, dec=True)])
+            rows.append([str(idx), unit, f"{area:,.2f}" if area else "", fv(uval, dec=True) if uval else ""])
             style_cmds += [('FONTSIZE', (0, r_i), (3, r_i), 8), ('ALIGN', (2, r_i), (3, r_i), 'RIGHT'),
                            ('ALIGN', (0, r_i), (0, r_i), 'CENTER')]
     else:
