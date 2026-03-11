@@ -680,6 +680,11 @@ class DashboardSummary(BaseModel):
     rera_deposit_required: float = 0
     total_units: int = 0
     units_sold: int = 0
+    # Inventory reconciliation fields
+    building_config_units: int = 0       # Units derived from building configuration
+    sales_data_units: int = 0            # Units derived from sales data (sold + unsold)
+    inventory_mismatch: bool = False     # True when the two totals differ
+    inventory_mismatch_delta: int = 0    # sales_data_units − building_config_units
 
 # =========================
 # AUTHENTICATION HELPERS
@@ -2470,11 +2475,22 @@ async def get_dashboard(project_id: str, current_user: dict = Depends(get_curren
     ).to_list(1000)
     
     # Calculate totals
-    total_sales_value = sum(s.get("sale_value", 0) for s in sales)
-    amount_collected = sum(s.get("amount_received", 0) for s in sales)
-    receivables = sum(s.get("balance_receivable", 0) for s in sales)
-    units_sold = len(sales)
-    total_units = sum(b.get("units", 0) for b in buildings)
+    # Only include sold units in financial calculations
+    sold_sales = [s for s in sales if s.get("status") == "sold" or s.get("is_sold", False)]
+    total_sales_value = sum(s.get("sale_value", 0) for s in sold_sales)
+    amount_collected = sum(s.get("amount_received", 0) for s in sold_sales)
+    receivables = sum(s.get("balance_receivable", 0) for s in sold_sales)
+    units_sold = len(sold_sales)
+
+    # Inventory reconciliation: compare building-config total vs sales-data total
+    building_config_units = sum(b.get("units", 0) for b in buildings)
+    sales_data_units = len(sales)  # all rows: sold + unsold
+    inventory_mismatch = (building_config_units != sales_data_units) and (building_config_units > 0 or sales_data_units > 0)
+    inventory_mismatch_delta = sales_data_units - building_config_units
+
+    # total_units: use sales_data_units (most complete source) when available,
+    # else fall back to building configuration
+    total_units = sales_data_units if sales else building_config_units
     
     # Calculate unsold inventory
     unsold_units = total_units - units_sold
@@ -2519,7 +2535,11 @@ async def get_dashboard(project_id: str, current_user: dict = Depends(get_curren
         unsold_inventory_value=unsold_inventory_value,
         rera_deposit_required=rera_deposit,
         total_units=total_units,
-        units_sold=units_sold
+        units_sold=units_sold,
+        building_config_units=building_config_units,
+        sales_data_units=sales_data_units,
+        inventory_mismatch=inventory_mismatch,
+        inventory_mismatch_delta=inventory_mismatch_delta
     )
 
 # =========================
@@ -2989,7 +3009,7 @@ async def validate_project_data(project_id: str, current_user: dict = Depends(ge
     # Check receivables vs balance cost
     total_receivables = sum(s.get("balance_receivable", 0) for s in sales)
     balance_cost = cost.get("balance_cost", 0) if cost else 0
-    
+
     if total_receivables > 0 and balance_cost > 0:
         ratio = total_receivables / balance_cost
         if ratio > 1.5:
@@ -2997,14 +3017,43 @@ async def validate_project_data(project_id: str, current_user: dict = Depends(ge
                 "type": "receivable_mismatch",
                 "message": f"Receivables ({total_receivables:,.0f}) significantly exceed balance cost ({balance_cost:,.0f})"
             })
-    
+
+    # Inventory reconciliation check: building config total vs sales data total
+    building_config_units = sum(b.get("units", 0) for b in buildings)
+    sales_data_units = len(sales)  # all rows: sold + unsold
+    units_sold_count = len([s for s in sales if s.get("status") == "sold" or s.get("is_sold", False)])
+    units_unsold_count = sales_data_units - units_sold_count
+
+    if building_config_units != sales_data_units and (building_config_units > 0 or sales_data_units > 0):
+        delta = sales_data_units - building_config_units
+        direction = "more" if delta > 0 else "fewer"
+        errors.append({
+            "type": "inventory_mismatch",
+            "message": (
+                f"Inventory count mismatch: Buildings configuration shows {building_config_units} units, "
+                f"but Sales data contains {sales_data_units} units "
+                f"({units_sold_count} sold + {units_unsold_count} unsold). "
+                f"Sales data has {abs(delta)} {direction} units than the building configuration. "
+                f"Please reconcile before generating RERA reports."
+            ),
+            "building_config_units": building_config_units,
+            "sales_data_units": sales_data_units,
+            "units_sold": units_sold_count,
+            "units_unsold": units_unsold_count,
+            "delta": delta
+        })
+
     return {
         "is_valid": len(errors) == 0,
         "errors": errors,
         "warnings": warnings,
         "summary": {
             "buildings": len(buildings),
-            "units_sold": len(sales),
+            "building_config_units": building_config_units,
+            "sales_data_units": sales_data_units,
+            "units_sold": units_sold_count,
+            "units_unsold": units_unsold_count,
+            "inventory_mismatch": building_config_units != sales_data_units,
             "total_receivables": total_receivables,
             "balance_cost": balance_cost
         }

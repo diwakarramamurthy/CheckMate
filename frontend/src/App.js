@@ -611,6 +611,39 @@ const DashboardPage = () => {
           ))}
         </div>
 
+        {/* Inventory Mismatch Alert */}
+        {dashboard?.inventory_mismatch && (
+          <div className="border border-amber-300 bg-amber-50 rounded-lg p-4 flex gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-amber-800">Inventory Count Mismatch Detected</p>
+              <p className="text-sm text-amber-700 mt-1">
+                The building configuration and sales data show different unit totals. Please reconcile before generating RERA reports.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-white border border-amber-200 rounded p-2">
+                  <p className="text-amber-600 font-medium">Building Configuration</p>
+                  <p className="text-xl font-bold text-slate-800">{dashboard.building_config_units}</p>
+                  <p className="text-xs text-slate-500">units from floor × apt/floor</p>
+                </div>
+                <div className="bg-white border border-amber-200 rounded p-2">
+                  <p className="text-amber-600 font-medium">Sales Data (Sold + Unsold)</p>
+                  <p className="text-xl font-bold text-slate-800">{dashboard.sales_data_units}</p>
+                  <p className="text-xs text-slate-500">
+                    {dashboard.units_sold} sold + {dashboard.sales_data_units - dashboard.units_sold} unsold
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-amber-700 mt-2 font-medium">
+                Difference: {Math.abs(dashboard.inventory_mismatch_delta)} unit{Math.abs(dashboard.inventory_mismatch_delta) !== 1 ? "s" : ""}{" "}
+                {dashboard.inventory_mismatch_delta > 0
+                  ? "more in sales data than building config"
+                  : "fewer in sales data than building config"}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Progress Card */}
         <Card>
           <CardHeader>
@@ -625,9 +658,12 @@ const DashboardPage = () => {
               <Progress value={dashboard?.project_completion_percentage || 0} className="h-3" />
             </div>
             <div className="grid grid-cols-2 gap-4 mt-6">
-              <div className="p-4 bg-slate-50 rounded-lg">
+              <div className={`p-4 rounded-lg ${dashboard?.inventory_mismatch ? "bg-amber-50 border border-amber-200" : "bg-slate-50"}`}>
                 <p className="text-sm text-slate-600">Total Units</p>
                 <p className="text-2xl font-bold">{dashboard?.total_units || 0}</p>
+                {dashboard?.inventory_mismatch && (
+                  <p className="text-xs text-amber-600 mt-1">⚠ Mismatch: bldg {dashboard.building_config_units} vs sales {dashboard.sales_data_units}</p>
+                )}
               </div>
               <div className="p-4 bg-emerald-50 rounded-lg">
                 <p className="text-sm text-slate-600">Units Sold</p>
