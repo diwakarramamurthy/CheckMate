@@ -1941,13 +1941,41 @@ async def _compute_cost_summary(project_id: str):
     actual_land    = land_doc.get("actual",    {}).get("total", 0) if land_doc else 0
 
     # ── 2. Estimated development cost ────────────────────────────────────
+    # Replicate GET /estimated-development-cost/{project_id} exactly:
+    # the stored total_estimated_development_cost may be stale, so we
+    # recompute it live from its component collections.
+    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
+    buildings_cost_est = sum(b.get("estimated_cost", 0) for b in buildings)
+
+    infra_cost_doc = await db.infrastructure_costs.find_one(
+        {"project_id": project_id}, {"_id": 0}
+    )
+    total_infra_cost     = infra_cost_doc.get("total_infrastructure_cost", 0) if infra_cost_doc else 0
+
+    # Estimated site expenditure (db.site_expenditure, NOT actual_site_expenditure)
+    est_site_exp_doc = await db.site_expenditure.find_one({"project_id": project_id}, {"_id": 0})
+    est_site_exp_total = (
+        (est_site_exp_doc.get("site_development_cost", 0) or 0) +
+        (est_site_exp_doc.get("salaries",              0) or 0) +
+        (est_site_exp_doc.get("consultants_fee",       0) or 0) +
+        (est_site_exp_doc.get("site_overheads",        0) or 0) +
+        (est_site_exp_doc.get("services_cost",         0) or 0) +
+        (est_site_exp_doc.get("machinery_cost",        0) or 0)
+    ) if est_site_exp_doc else 0
+
+    # taxes_premiums_fees and finance_cost are user-entered on the estimate
     est_dev_doc = await db.estimated_development_costs.find_one(
         {"project_id": project_id}, {"_id": 0}
     )
-    estimated_dev = est_dev_doc.get("total_estimated_development_cost", 0) if est_dev_doc else 0
+    est_taxes_premiums = est_dev_doc.get("taxes_premiums_fees", 0) if est_dev_doc else 0
+    est_finance_cost   = est_dev_doc.get("finance_cost",        0) if est_dev_doc else 0
+
+    estimated_dev = (
+        buildings_cost_est + total_infra_cost + est_site_exp_total +
+        est_taxes_premiums + est_finance_cost
+    )
 
     # ── 3. Actual construction cost = Σ(building estimated_cost × completion%) ──
-    buildings = await db.buildings.find({"project_id": project_id}, {"_id": 0}).to_list(1000)
     construction_progress = await db.construction_progress.find(
         {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
     ).to_list(1000)
@@ -1958,10 +1986,7 @@ async def _compute_cost_summary(project_id: str):
     )
 
     # ── 4. Actual infrastructure cost = infra_total × infra_completion% ──
-    infra_cost_doc = await db.infrastructure_costs.find_one(
-        {"project_id": project_id}, {"_id": 0}
-    )
-    total_infra_cost = infra_cost_doc.get("total_infrastructure_cost", 0) if infra_cost_doc else 0
+    # infra_cost_doc and total_infra_cost already fetched above
     infra_progress_doc = await db.infrastructure_progress.find_one(
         {"project_id": project_id, "quarter": quarter, "year": year}, {"_id": 0}
     )
