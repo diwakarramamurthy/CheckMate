@@ -3611,7 +3611,18 @@ const ProjectCostsPage = () => {
         quarter,
         year,
         ...cost,
-        estimated_development_cost: estimatedDevCost.total
+        // Map frontend field names to the backend model field names so that
+        // total_cost_incurred and total_estimated_cost are stored correctly.
+        construction_cost_actual: actualCosts.construction_cost,
+        onsite_salaries: actualSiteExpenditure.salaries,
+        onsite_consultants_fees: actualSiteExpenditure.consultants_fee,
+        onsite_site_overheads: actualSiteExpenditure.site_overheads,
+        onsite_services_cost: actualSiteExpenditure.services_cost,
+        onsite_machinery_equipment: actualSiteExpenditure.machinery_cost,
+        // Estimated totals from their authoritative sources
+        estimated_land_cost: estimatedLandTotal,
+        estimated_development_cost: estimatedDevCost.total,
+        construction_cost_estimated: estimatedDevCost.buildings_cost + estimatedDevCost.infrastructure_cost,
       });
       toast.success("Cost data saved");
     } catch (err) {
