@@ -2740,7 +2740,7 @@ const ConstructionProgressPage = () => {
         }, 0);
         const catBaseApplicable = cat.activities.reduce((sum, act) => {
           const actData = catData[act.id] || {};
-          const actWt = parseFloat(actData._custom_weightage) || act.weightage;
+          const actWt = (actData._custom_weightage != null && actData._custom_weightage !== "") ? parseFloat(actData._custom_weightage) || 0 : act.weightage;
           return actData.is_applicable !== false ? sum + actWt : sum;
         }, 0);
 
@@ -2748,7 +2748,7 @@ const ConstructionProgressPage = () => {
           const actData = catData[act.id] || { completion: 0, is_applicable: true };
           if (actData.is_applicable !== false) {
             const cost = parseFloat(actData.cost) || 0;
-            const actWt = parseFloat(actData._custom_weightage) || act.weightage;
+            const actWt = (actData._custom_weightage != null && actData._custom_weightage !== "") ? parseFloat(actData._custom_weightage) || 0 : act.weightage;
             const effectiveWt = totalCost > 0
               ? (cost / totalCost) * catBaseApplicable
               : actWt;
@@ -3064,7 +3064,7 @@ const ConstructionProgressPage = () => {
                               value={catData._custom_base_weightage !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== "" ? catData._custom_base_weightage : category.total_weightage}
                               onChange={(e) => setTowerActivities(prev => ({
                                 ...prev,
-                                [category.id]: { ...prev[category.id], _custom_base_weightage: e.target.value === "" ? "" : parseFloat(e.target.value) || 0 }
+                                [category.id]: { ...prev[category.id], _custom_base_weightage: e.target.value }
                               }))}
                               className={`w-20 h-7 text-xs text-center ${catWarning ? 'border-amber-400 bg-amber-50' : ''}`}
                               title="Edit Main Activity Base Weightage %"
@@ -3200,7 +3200,7 @@ const ConstructionProgressPage = () => {
                                       max="100"
                                       step="0.01"
                                       value={actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== "" ? actData._custom_weightage : activity.weightage}
-                                      onChange={(e) => handleActivityChange(category.id, activity.id, '_custom_weightage', e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                                      onChange={(e) => handleActivityChange(category.id, activity.id, '_custom_weightage', e.target.value)}
                                       className="w-20 mx-auto text-center text-sm h-8"
                                       title="Edit sub-activity weightage %"
                                     />
