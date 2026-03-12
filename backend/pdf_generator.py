@@ -252,6 +252,7 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
         
         # Extract completion percentages from tower_activities
         plinth = tower_acts.get('plinth_completion', {})
+        basement_slab = tower_acts.get('basement_slab_completion', {})
         slab = tower_acts.get('slab_completion', {})
         brickwork = tower_acts.get('brickwork_plastering', {})
         plumbing = tower_acts.get('plumbing', {})
@@ -285,7 +286,7 @@ def generate_form1_pdf(project, buildings, construction_progress, infrastructure
         table_a_data = [
             ["Sr. No", "Tasks/Activity", "Percentage of\nwork done"],
             ["1", "Excavation", f"{get_activity_completion(plinth, 'excavation'):.0f}%"],
-            ["2", f"{num_basements} number of Basement(s) and Plinth", f"{get_cat_avg(plinth):.0f}%"],
+            ["2", f"{num_basements} number of Basement(s) and Plinth", f"{((get_cat_avg(plinth) + get_cat_avg(basement_slab)) / 2 if any(isinstance(v, dict) and v.get('completion', 0) > 0 for v in basement_slab.values()) else get_cat_avg(plinth)):.0f}%"],
             ["3", f"{num_podiums} number of Podiums", f"{get_cat_avg(plinth):.0f}%" if num_podiums > 0 else "N/A"],
             ["4", "Stilt Floor", f"{get_activity_completion(plinth, 'filling_earth_plinth_pcc'):.0f}%"],
             ["5", f"{num_floors} number of Slabs of Super Structure", f"{get_cat_avg(slab):.0f}%"],

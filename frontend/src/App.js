@@ -1693,6 +1693,7 @@ const BuildingsPage = () => {
     commercial_floors: 0,
     residential_floors: 0,
     apartments_per_floor: 0,
+    apartment_classification: "NA",
     estimated_cost: 0
   };
   
@@ -1888,6 +1889,7 @@ const BuildingsPage = () => {
       commercial_floors: building.commercial_floors || 0,
       residential_floors: building.residential_floors || 0,
       apartments_per_floor: building.apartments_per_floor || 0,
+      apartment_classification: building.apartment_classification || "NA",
       estimated_cost: building.estimated_cost || 0
     });
     setDialogOpen(true);
@@ -2076,6 +2078,25 @@ const BuildingsPage = () => {
               onChange={(e) => setFormData(f => ({ ...f, apartments_per_floor: parseInt(e.target.value) || 0 }))}
               data-testid="apartments-per-floor-input"
             />
+          </div>
+        )}
+
+        {typeConfig.has_apartments_per_floor && (
+          <div>
+            <Label className="form-label">Apartment Classification</Label>
+            <Select
+              value={formData.apartment_classification || "NA"}
+              onValueChange={(v) => setFormData(f => ({ ...f, apartment_classification: v }))}
+            >
+              <SelectTrigger data-testid="apartment-classification-select">
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                {["Studio", "1 BHK", "1.5 BHK", "2 BHK", "3 BHK", "4 BHK", "Pent-house", "NA"].map(c => (
+                  <SelectItem key={c} value={c}>{c === "NA" ? "NA (Not Applicable / Mixed)" : c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -2527,7 +2548,8 @@ const ConstructionProgressPage = () => {
   const [categoryCompletions, setCategoryCompletions] = useState({});
   const [overallCompletion, setOverallCompletion] = useState(0);
   const [infraOverallCompletion, setInfraOverallCompletion] = useState(0);
-  
+  const [weightageWarnings, setWeightageWarnings] = useState({ categories: {}, globalTotal: null });
+
   // Actual Site Expenditure state
   const [actualSiteExpenditure, setActualSiteExpenditure] = useState({
     site_development_cost: 0,
@@ -2702,6 +2724,7 @@ const ConstructionProgressPage = () => {
     let totalApplicable = 0;
     let weightedCompletion = 0;
     const catComps = {};
+    const newWarnings = { categories: {}, globalTotal: null };
 
     template.tower_construction.categories.forEach(cat => {
       const catData = towerActivities[cat.id] || {};
@@ -2717,16 +2740,18 @@ const ConstructionProgressPage = () => {
         }, 0);
         const catBaseApplicable = cat.activities.reduce((sum, act) => {
           const actData = catData[act.id] || {};
-          return actData.is_applicable !== false ? sum + act.weightage : sum;
+          const actWt = parseFloat(actData._custom_weightage) || act.weightage;
+          return actData.is_applicable !== false ? sum + actWt : sum;
         }, 0);
 
         cat.activities.forEach(act => {
           const actData = catData[act.id] || { completion: 0, is_applicable: true };
           if (actData.is_applicable !== false) {
             const cost = parseFloat(actData.cost) || 0;
+            const actWt = parseFloat(actData._custom_weightage) || act.weightage;
             const effectiveWt = totalCost > 0
               ? (cost / totalCost) * catBaseApplicable
-              : act.weightage;
+              : actWt;
             totalApplicable += effectiveWt;
             catApplicable += effectiveWt;
             weightedCompletion += effectiveWt * (actData.completion || 0) / 100;
@@ -2734,21 +2759,54 @@ const ConstructionProgressPage = () => {
           }
         });
       } else {
-        // Standard template-weightage mode
+        // Standard (custom or template) weightage mode
         cat.activities.forEach(act => {
           const actData = catData[act.id] || { completion: 0, is_applicable: true };
           if (actData.is_applicable !== false) {
-            totalApplicable += act.weightage;
-            catApplicable += act.weightage;
-            weightedCompletion += act.weightage * (actData.completion || 0) / 100;
-            catWeighted += act.weightage * (actData.completion || 0) / 100;
+            const effectiveWt = parseFloat(actData._custom_weightage) !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
+              ? parseFloat(actData._custom_weightage)
+              : act.weightage;
+            totalApplicable += effectiveWt;
+            catApplicable += effectiveWt;
+            weightedCompletion += effectiveWt * (actData.completion || 0) / 100;
+            catWeighted += effectiveWt * (actData.completion || 0) / 100;
           }
         });
       }
 
       catComps[cat.id] = catApplicable > 0 ? (catWeighted / catApplicable * 100) : 0;
+
+      // Validation: check if sub-activity weights sum to the category base weightage
+      if (!useCostWeightage) {
+        const subTotal = cat.activities.reduce((sum, act) => {
+          const actData = catData[act.id] || {};
+          const actWt = parseFloat(actData._custom_weightage) !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
+            ? parseFloat(actData._custom_weightage)
+            : act.weightage;
+          return sum + actWt;
+        }, 0);
+        const baseWt = parseFloat(catData._custom_base_weightage) !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
+          ? parseFloat(catData._custom_base_weightage)
+          : cat.total_weightage;
+        if (Math.abs(subTotal - baseWt) > 0.05) {
+          newWarnings.categories[cat.id] = `Sub-activities sum to ${subTotal.toFixed(2)}% but Main Activity Base Weightage is ${baseWt.toFixed(2)}%`;
+        }
+      }
     });
 
+    // Global validation: sum of all category base weightages should equal 100%
+    const globalSum = template.tower_construction.categories.reduce((sum, cat) => {
+      const catData = towerActivities[cat.id] || {};
+      const baseWt = parseFloat(catData._custom_base_weightage) !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
+        ? parseFloat(catData._custom_base_weightage)
+        : cat.total_weightage;
+      return sum + baseWt;
+    }, 0);
+    if (Math.abs(globalSum - 100) > 0.05) {
+      newWarnings.globalTotal = `Total of all Main Activity Base Weightages = ${globalSum.toFixed(2)}% (should equal 100%)`;
+    }
+
+    setWeightageWarnings(newWarnings);
     setCategoryCompletions(catComps);
     setOverallCompletion(totalApplicable > 0 ? (weightedCompletion / totalApplicable * 100) : 0);
 
@@ -2949,11 +3007,24 @@ const ConstructionProgressPage = () => {
         ) : template && activeTab === "tower" && selectedBuilding ? (
           /* Tower Construction Activities */
           <div className="space-y-4">
+            {/* Global weightage warning */}
+            {weightageWarnings.globalTotal && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800">
+                <span className="font-bold mt-0.5">⚠</span>
+                <span>{weightageWarnings.globalTotal}</span>
+              </div>
+            )}
             {template.tower_construction.categories.map((category, catIdx) => {
               const catCompletion = categoryCompletions[category.id] || 0;
               const isExpanded = expandedCategories[category.id] !== false;
               const catData = towerActivities[category.id] || {};
               const useCostWeightage = catData._use_cost_weightage || false;
+              const catWarning = weightageWarnings.categories[category.id];
+
+              // Effective base weightage (custom or template)
+              const effectiveCatBase = catData._custom_base_weightage !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
+                ? parseFloat(catData._custom_base_weightage)
+                : category.total_weightage;
 
               // Compute total cost for applicable activities in this category (for rollup display)
               const totalCategoryCost = category.activities.reduce((sum, act) => {
@@ -2964,7 +3035,9 @@ const ConstructionProgressPage = () => {
               // Pre-compute effective weightages for cost-mode display
               const catBaseApplicable = category.activities.reduce((sum, act) => {
                 const actData = catData[act.id] || {};
-                return actData.is_applicable !== false ? sum + act.weightage : sum;
+                const actWt = actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
+                  ? parseFloat(actData._custom_weightage) : act.weightage;
+                return actData.is_applicable !== false ? sum + actWt : sum;
               }, 0);
 
               return (
@@ -2980,8 +3053,27 @@ const ConstructionProgressPage = () => {
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900">{category.name}</h3>
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <p className="text-sm text-slate-500">Base Weightage: {category.total_weightage}%</p>
+                        <div className="flex items-center gap-3 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-slate-500">Base Wt.%:</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={catData._custom_base_weightage !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== "" ? catData._custom_base_weightage : category.total_weightage}
+                              onChange={(e) => setTowerActivities(prev => ({
+                                ...prev,
+                                [category.id]: { ...prev[category.id], _custom_base_weightage: e.target.value === "" ? "" : parseFloat(e.target.value) || 0 }
+                              }))}
+                              className={`w-20 h-7 text-xs text-center ${catWarning ? 'border-amber-400 bg-amber-50' : ''}`}
+                              title="Edit Main Activity Base Weightage %"
+                            />
+                            <span className="text-xs text-slate-400">%</span>
+                          </div>
+                          {catWarning && (
+                            <span className="text-xs text-amber-700 font-medium">⚠ {catWarning}</span>
+                          )}
                           {useCostWeightage && totalCategoryCost > 0 && (
                             <p className="text-sm text-emerald-600 font-medium">
                               Total Cost: ₹{totalCategoryCost.toLocaleString('en-IN')}
@@ -3054,13 +3146,16 @@ const ConstructionProgressPage = () => {
                             const actData = catData[activity.id] || { completion: 0, is_applicable: true, cost: 0 };
                             const isNA = actData.is_applicable === false;
                             const cost = parseFloat(actData.cost) || 0;
+                            // Effective custom weightage for this activity
+                            const customWt = actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
+                              ? parseFloat(actData._custom_weightage) : activity.weightage;
 
                             // Compute effective weightage for display
-                            let displayWt = activity.weightage;
+                            let displayWt = customWt;
                             if (useCostWeightage && !isNA) {
                               displayWt = totalCategoryCost > 0
                                 ? (cost / totalCategoryCost) * catBaseApplicable
-                                : activity.weightage;
+                                : customWt;
                             }
 
                             return (
@@ -3098,8 +3193,19 @@ const ConstructionProgressPage = () => {
                                     <span className={`font-medium ${totalCategoryCost > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
                                       {formatNumber(displayWt, 2)}%
                                     </span>
+                                  ) : !isNA ? (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.01"
+                                      value={actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== "" ? actData._custom_weightage : activity.weightage}
+                                      onChange={(e) => handleActivityChange(category.id, activity.id, '_custom_weightage', e.target.value === "" ? "" : parseFloat(e.target.value) || 0)}
+                                      className="w-20 mx-auto text-center text-sm h-8"
+                                      title="Edit sub-activity weightage %"
+                                    />
                                   ) : (
-                                    <span>{activity.weightage}%</span>
+                                    <span className="text-slate-400">—</span>
                                   )}
                                 </TableCell>
                                 <TableCell>
@@ -4173,7 +4279,8 @@ const SalesPage = () => {
     sale_value: 0,
     amount_received: 0,
     buyer_name: "",
-    agreement_date: ""
+    agreement_date: "",
+    apartment_classification: "NA"
   });
 
   useEffect(() => {
@@ -4218,7 +4325,7 @@ const SalesPage = () => {
       }
       setDialogOpen(false);
       setEditingSale(null);
-      setForm({ unit_number: "", building_id: "", building_name: "", carpet_area: 0, sale_value: 0, amount_received: 0, buyer_name: "", agreement_date: "" });
+      setForm({ unit_number: "", building_id: "", building_name: "", carpet_area: 0, sale_value: 0, amount_received: 0, buyer_name: "", agreement_date: "", apartment_classification: "NA" });
       fetchSales();
     } catch (err) {
       toast.error("Failed to save sale");
@@ -4269,7 +4376,7 @@ const SalesPage = () => {
             </Select>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => { setEditingSale(null); setForm({ unit_number: "", building_id: "", building_name: "", carpet_area: 0, sale_value: 0, amount_received: 0, buyer_name: "", agreement_date: "" }); }}>
+                <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => { setEditingSale(null); setForm({ unit_number: "", building_id: "", building_name: "", carpet_area: 0, sale_value: 0, amount_received: 0, buyer_name: "", agreement_date: "", apartment_classification: "NA" }); }}>
                   <Plus className="h-4 w-4 mr-2" />Add Sale
                 </Button>
               </DialogTrigger>
@@ -4305,9 +4412,20 @@ const SalesPage = () => {
                     <Label className="form-label">Amount Received (₹)</Label>
                     <Input type="number" value={form.amount_received} onChange={(e) => setForm(f => ({ ...f, amount_received: parseFloat(e.target.value) || 0 }))} />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <Label className="form-label">Agreement Date</Label>
                     <Input type="date" value={form.agreement_date} onChange={(e) => setForm(f => ({ ...f, agreement_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="form-label">Apartment Classification</Label>
+                    <Select value={form.apartment_classification || "NA"} onValueChange={(v) => setForm(f => ({ ...f, apartment_classification: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        {["Studio", "1 BHK", "1.5 BHK", "2 BHK", "3 BHK", "4 BHK", "Pent-house", "NA"].map(c => (
+                          <SelectItem key={c} value={c}>{c === "NA" ? "NA (Not Specified)" : c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <DialogFooter>
@@ -4394,6 +4512,7 @@ const SalesPage = () => {
                   <TableRow>
                     <TableHead>Unit</TableHead>
                     <TableHead>Building</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Buyer</TableHead>
                     <TableHead className="text-right">Area</TableHead>
@@ -4408,6 +4527,11 @@ const SalesPage = () => {
                     <TableRow key={sale.sale_id} className={!sale.buyer_name ? "bg-amber-50" : ""}>
                       <TableCell className="font-medium">{sale.unit_number}</TableCell>
                       <TableCell>{sale.building_name}</TableCell>
+                      <TableCell>
+                        {sale.apartment_classification && sale.apartment_classification !== "NA"
+                          ? <Badge variant="outline" className="text-xs">{sale.apartment_classification}</Badge>
+                          : <span className="text-slate-400 text-xs">—</span>}
+                      </TableCell>
                       <TableCell>
                         {sale.buyer_name ? (
                           <Badge className="bg-emerald-100 text-emerald-700">Sold</Badge>
@@ -5093,11 +5217,12 @@ const ImportPage = () => {
                 <li><strong>Carpet Area</strong> - Area in sq.ft</li>
                 <li><strong>Sale Value</strong> - Agreement value in ₹</li>
                 <li><strong>Amount Received</strong> - Amount collected in ₹</li>
-                <li><strong>Buyer Name</strong> - Customer name (optional)</li>
+                <li><strong>Buyer Name</strong> - Customer name (optional, leave blank for unsold)</li>
                 <li><strong>Agreement Date</strong> - Date of agreement (optional)</li>
+                <li><strong>Apartment Classification</strong> - Unit type: Studio, 1 BHK, 1.5 BHK, 2 BHK, 3 BHK, 4 BHK, Pent-house, or NA (optional, defaults to NA)</li>
               </ul>
               <p className="text-slate-500 mt-4">
-                Download the template for the exact format. The system auto-calculates Balance Receivable.
+                Download the template for the exact format. The system auto-calculates Balance Receivable. Accepted column name aliases for Apartment Classification: "apartment type", "flat type", "bhk type", "unit type".
               </p>
             </div>
           </CardContent>

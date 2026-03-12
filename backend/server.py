@@ -39,6 +39,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # =========================
+# CONSTANTS
+# =========================
+
+APARTMENT_CLASSIFICATIONS = [
+    "Studio", "1 BHK", "1.5 BHK", "2 BHK", "3 BHK", "4 BHK", "Pent-house", "NA"
+]
+
+# =========================
 # MODELS
 # =========================
 
@@ -182,7 +190,8 @@ class BuildingBase(BaseModel):
     commercial_floors: int = 0  # Only for mixed_tower
     residential_floors: int = 0
     apartments_per_floor: int = 0  # Only for towers
-    
+    apartment_classification: Optional[str] = "NA"  # e.g. "2 BHK", "Studio", etc. Only for tower types
+
     # Legacy fields (calculated)
     floors: int = 0  # Total floors (auto-calculated)
     units: int = 0   # Total units (auto-calculated)
@@ -235,6 +244,16 @@ class PlinthCompletion(BaseModel):
     reinforcement_plinth_beam: ActivityItem = ActivityItem(base_weightage=1.00)
     concreting_plinth_beam: ActivityItem = ActivityItem(base_weightage=0.80)
     filling_earth_plinth_pcc: ActivityItem = ActivityItem(base_weightage=0.30)
+
+# NEW: Completion of Basement Slabs (Below Plinth) - 0% default (user-configurable)
+class BasementSlabCompletion(BaseModel):
+    reinforcement_lintel_roof: ActivityItem = ActivityItem(base_weightage=0)
+    shuttering_for_column: ActivityItem = ActivityItem(base_weightage=0)
+    concreting_for_column: ActivityItem = ActivityItem(base_weightage=0)
+    shuttering_beams_roof: ActivityItem = ActivityItem(base_weightage=0)
+    reinforcement_beams_roof: ActivityItem = ActivityItem(base_weightage=0)
+    concreting_beams_roof: ActivityItem = ActivityItem(base_weightage=0)
+    dismantling_roof_shuttering: ActivityItem = ActivityItem(base_weightage=0)
 
 # b) Completion of Slabs at all levels - 31.78% (divided by number of floors)
 class SlabCompletion(BaseModel):
@@ -308,6 +327,7 @@ class HandoverIntimation(BaseModel):
 
 # Complete Tower/Building Construction Progress
 class TowerConstructionProgress(BaseModel):
+    basement_slab_completion: BasementSlabCompletion = BasementSlabCompletion()
     plinth_completion: PlinthCompletion = PlinthCompletion()
     slab_completion: SlabCompletion = SlabCompletion()
     brickwork_plastering: BrickworkPlastering = BrickworkPlastering()
@@ -586,6 +606,7 @@ class UnitSaleBase(BaseModel):
     agreement_date: Optional[str] = None
     allotment_letter_date: Optional[str] = None  # For Annexure A
     is_sold: bool = True  # False for unsold inventory
+    apartment_classification: Optional[str] = "NA"  # e.g. "2 BHK", "Studio", "NA"
 
 class UnitSaleCreate(UnitSaleBase):
     project_id: str
@@ -969,7 +990,8 @@ async def get_building_types():
             {"field": "parking_basement", "label": "Basement Parking Floors"},
             {"field": "parking_stilt_ground", "label": "Stilt/Ground Parking Floors"},
             {"field": "parking_upper_level", "label": "Upper Level Parking Floors"}
-        ]
+        ],
+        "apartment_classifications": APARTMENT_CLASSIFICATIONS
     }
 
 @api_router.get("/buildings", response_model=List[BuildingResponse])
@@ -1523,6 +1545,21 @@ async def get_detailed_construction_template():
             "total_weightage": 100,
             "categories": [
                 {
+                    "id": "basement_slab_completion",
+                    "name": "Completion of Basement Slabs (Below Plinth)",
+                    "total_weightage": 0,
+                    "note": "Default 0% weightage — adjust using editable weightage inputs",
+                    "activities": [
+                        {"id": "reinforcement_lintel_roof", "name": "Reinforcement up to Lintel/Roof bottom", "weightage": 0},
+                        {"id": "shuttering_for_column", "name": "Shuttering for Column", "weightage": 0},
+                        {"id": "concreting_for_column", "name": "Concreting for Column", "weightage": 0},
+                        {"id": "shuttering_beams_roof", "name": "Shuttering for Beams and Roof", "weightage": 0},
+                        {"id": "reinforcement_beams_roof", "name": "Reinforcement for Beams and Roof", "weightage": 0},
+                        {"id": "concreting_beams_roof", "name": "Concreting for Beams and Roof", "weightage": 0},
+                        {"id": "dismantling_roof_shuttering", "name": "Dismantling of Roof Shuttering", "weightage": 0}
+                    ]
+                },
+                {
                     "id": "plinth_completion",
                     "name": "Completion of Plinth",
                     "total_weightage": 10.89,
@@ -1695,6 +1732,16 @@ def calculate_recalibrated_completion(activities_data: dict, template_categories
 
         use_cost_weightage = cat_data.get("_use_cost_weightage", False)
 
+        def _get_act_weightage(act_data: dict, template_weightage: float) -> float:
+            """Return custom weightage if explicitly set (even if 0), else template default."""
+            cw = act_data.get("_custom_weightage")
+            if cw is not None and cw != "":
+                try:
+                    return float(cw)
+                except (TypeError, ValueError):
+                    pass
+            return template_weightage
+
         if use_cost_weightage:
             # --- Cost-based weightage mode ---
             # Sum cost and base-weightage for applicable activities only
@@ -1705,7 +1752,9 @@ def calculate_recalibrated_completion(activities_data: dict, template_categories
                 act_data = cat_data.get(act_id, {})
                 if act_data.get("is_applicable", True):
                     total_cost += float(act_data.get("cost", 0) or 0)
-                    cat_base_applicable += activity["weightage"]
+                    # Use custom weightage if set, else template weightage
+                    act_base_wt = _get_act_weightage(act_data, activity["weightage"])
+                    cat_base_applicable += act_base_wt
 
             for activity in category["activities"]:
                 act_id = activity["id"]
@@ -1714,24 +1763,26 @@ def calculate_recalibrated_completion(activities_data: dict, template_categories
                 if is_applicable:
                     completion = act_data.get("completion", 0)
                     cost = float(act_data.get("cost", 0) or 0)
-                    # Effective weight = proportional to cost; if no costs yet, fall back to template
+                    act_base_wt = _get_act_weightage(act_data, activity["weightage"])
+                    # Effective weight = proportional to cost; if no costs yet, fall back to base weightage
                     if total_cost > 0:
                         effective_wt = (cost / total_cost) * cat_base_applicable
                     else:
-                        effective_wt = activity["weightage"]
+                        effective_wt = act_base_wt
 
                     total_applicable_weightage += effective_wt
                     cat_applicable_weightage += effective_wt
                     weighted_completion += effective_wt * completion / 100
                     cat_weighted_completion += effective_wt * completion / 100
         else:
-            # --- Standard (template) weightage mode ---
+            # --- Standard (template or custom) weightage mode ---
             for activity in category["activities"]:
                 act_id = activity["id"]
                 act_data = cat_data.get(act_id, {})
                 is_applicable = act_data.get("is_applicable", True)
                 if is_applicable:
-                    base_weightage = activity["weightage"]
+                    # Use custom weightage if user has set one, else fall back to template default
+                    base_weightage = _get_act_weightage(act_data, activity["weightage"])
                     completion = act_data.get("completion", 0)
 
                     total_applicable_weightage += base_weightage
@@ -2643,7 +2694,8 @@ async def import_sales_excel(
         "sale_value": ["sale value", "agreement value", "total value", "price"],
         "amount_received": ["amount received", "received", "collection", "amount collected"],
         "buyer_name": ["buyer name", "buyer", "customer name", "allottee"],
-        "agreement_date": ["agreement date", "date", "booking date"]
+        "agreement_date": ["agreement date", "date", "booking date"],
+        "apartment_classification": ["apartment classification", "apt classification", "apartment type", "flat type", "bhk type", "unit type", "type"]
     }
     
     def find_column(field):
@@ -2673,6 +2725,7 @@ async def import_sales_excel(
             received_col = find_column("amount_received")
             buyer_col = find_column("buyer_name")
             date_col = find_column("agreement_date")
+            apt_class_col = find_column("apartment_classification")
             
             unit_number = ws.cell(row=row, column=unit_col).value if unit_col else None
             building_name = ws.cell(row=row, column=building_col).value if building_col else None
@@ -2685,6 +2738,7 @@ async def import_sales_excel(
             amount_received = float(ws.cell(row=row, column=received_col).value or 0) if received_col else 0
             buyer_name = str(ws.cell(row=row, column=buyer_col).value or "").strip() if buyer_col else ""
             agreement_date = ws.cell(row=row, column=date_col).value if date_col else None
+            apartment_classification = str(ws.cell(row=row, column=apt_class_col).value or "NA").strip() if apt_class_col else "NA"
             
             if agreement_date and hasattr(agreement_date, 'isoformat'):
                 agreement_date = agreement_date.isoformat()
@@ -2716,6 +2770,7 @@ async def import_sales_excel(
                 "amount_received": amount_received,
                 "buyer_name": buyer_name,
                 "agreement_date": agreement_date,
+                "apartment_classification": apartment_classification,
                 "balance_receivable": balance,
                 "status": status,  # "sold" or "unsold"
                 "created_at": now,
@@ -2748,7 +2803,7 @@ async def get_sales_template():
     ws = wb.active
     ws.title = "Sales Data"
     
-    headers = ["Unit Number", "Building Name", "Carpet Area", "Sale Value", "Amount Received", "Buyer Name", "Agreement Date"]
+    headers = ["Unit Number", "Building Name", "Carpet Area", "Sale Value", "Amount Received", "Buyer Name", "Agreement Date", "Apartment Classification"]
     header_fill = PatternFill(start_color="172554", end_color="172554", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
     
@@ -2761,8 +2816,8 @@ async def get_sales_template():
     
     # Add sample data
     sample_data = [
-        ["A-101", "Tower A", 850, 7500000, 5000000, "John Doe", "2024-01-15"],
-        ["A-102", "Tower A", 920, 8200000, 4100000, "Jane Smith", "2024-02-20"],
+        ["A-101", "Tower A", 850, 7500000, 5000000, "John Doe", "2024-01-15", "2 BHK"],
+        ["A-102", "Tower A", 920, 8200000, 4100000, "Jane Smith", "2024-02-20", "3 BHK"],
     ]
     for row_idx, row_data in enumerate(sample_data, 2):
         for col_idx, value in enumerate(row_data, 1):

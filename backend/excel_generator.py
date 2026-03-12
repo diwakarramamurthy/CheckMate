@@ -177,8 +177,9 @@ def generate_form1_excel(project, buildings, construction_progress, infrastructu
         progress = progress_lookup.get(building.get("building_id"), {})
         ta = progress.get("tower_activities", {})
 
-        plinth   = ta.get("plinth_completion", {})
-        slab     = ta.get("slab_completion", {})
+        plinth        = ta.get("plinth_completion", {})
+        basement_slab = ta.get("basement_slab_completion", {})
+        slab          = ta.get("slab_completion", {})
         brickwk  = ta.get("brickwork_plastering", {})
         plumbing = ta.get("plumbing", {})
         elec     = ta.get("electrical_works", {})
@@ -202,7 +203,7 @@ def generate_form1_excel(project, buildings, construction_progress, infrastructu
             ("Excavation",
              f"{plinth.get('excavation', {}).get('completion', 0):.0f}%"),
             ("Basements and Plinth",
-             f"{get_cat_avg(plinth):.0f}%"),
+             f"{((get_cat_avg(plinth) + get_cat_avg(basement_slab)) / 2 if any(isinstance(v, dict) and v.get('completion', 0) > 0 for v in basement_slab.values()) else get_cat_avg(plinth)):.0f}%"),
             (f"{building.get('residential_floors', 0)} Slabs of Super Structure",
              f"{get_cat_avg(slab):.0f}%"),
             ("Internal Walls, Plaster, Flooring (Brickwork & Plastering)",
@@ -1191,7 +1192,7 @@ def generate_annexure_a_excel(project, sales, buildings, quarter, year):
         data_cell(ws.cell(row=r, column=1),  str(idx), align="center")
         data_cell(ws.cell(row=r, column=2),  sale.get("unit_number", ""), align="center")
         data_cell(ws.cell(row=r, column=3),  bl.get(sale.get("building_id"), sale.get("building_name", "")))
-        data_cell(ws.cell(row=r, column=4),  sale.get("unit_type", sale.get("flat_type", "")), align="center")
+        data_cell(ws.cell(row=r, column=4),  sale.get("apartment_classification", sale.get("unit_type", sale.get("flat_type", "NA"))), align="center")
         data_cell(ws.cell(row=r, column=5),  str(sale.get("carpet_area", "")), align="center")
         data_cell(ws.cell(row=r, column=6),  format_indian_number(agr), align="right")
         data_cell(ws.cell(row=r, column=7),  format_indian_number(recv), align="right")
