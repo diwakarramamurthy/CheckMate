@@ -3056,17 +3056,15 @@ const ConstructionProgressPage = () => {
                         <div className="flex items-center gap-3 flex-wrap" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-slate-500">Base Wt.%:</span>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
+                            <input
+                              type="text"
+                              inputMode="decimal"
                               value={catData._custom_base_weightage !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== "" ? catData._custom_base_weightage : category.total_weightage}
                               onChange={(e) => setTowerActivities(prev => ({
                                 ...prev,
                                 [category.id]: { ...prev[category.id], _custom_base_weightage: e.target.value }
                               }))}
-                              className={`w-20 h-7 text-xs text-center ${catWarning ? 'border-amber-400 bg-amber-50' : ''}`}
+                              className={`w-20 h-7 text-xs text-center rounded-md border px-2 ${catWarning ? 'border-amber-400 bg-amber-50' : 'border-input bg-transparent'}`}
                               title="Edit Main Activity Base Weightage %"
                             />
                             <span className="text-xs text-slate-400">%</span>
@@ -3194,14 +3192,12 @@ const ConstructionProgressPage = () => {
                                       {formatNumber(displayWt, 2)}%
                                     </span>
                                   ) : !isNA ? (
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
                                       value={actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== "" ? actData._custom_weightage : activity.weightage}
                                       onChange={(e) => handleActivityChange(category.id, activity.id, '_custom_weightage', e.target.value)}
-                                      className="w-20 mx-auto text-center text-sm h-8"
+                                      className="w-20 mx-auto block text-center text-sm rounded-md border border-input bg-transparent px-1 h-8"
                                       title="Edit sub-activity weightage %"
                                     />
                                   ) : (
@@ -4512,7 +4508,7 @@ const SalesPage = () => {
                   <TableRow>
                     <TableHead>Unit</TableHead>
                     <TableHead>Building</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead>Apt. Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Buyer</TableHead>
                     <TableHead className="text-right">Area</TableHead>
@@ -4530,7 +4526,7 @@ const SalesPage = () => {
                       <TableCell>
                         {sale.apartment_classification && sale.apartment_classification !== "NA"
                           ? <Badge variant="outline" className="text-xs">{sale.apartment_classification}</Badge>
-                          : <span className="text-slate-400 text-xs">—</span>}
+                          : <span className="text-slate-400 text-xs">NA</span>}
                       </TableCell>
                       <TableCell>
                         {sale.buyer_name ? (
