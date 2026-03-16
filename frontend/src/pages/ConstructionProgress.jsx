@@ -285,7 +285,7 @@ const ConstructionProgressPage = () => {
         cat.activities.forEach(act => {
           const actData = catData[act.id] || { completion: 0, is_applicable: true };
           if (actData.is_applicable !== false) {
-            const effectiveWt = parseFloat(actData._custom_weightage) !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
+            const effectiveWt = actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
               ? parseFloat(actData._custom_weightage)
               : act.weightage;
             totalApplicable += effectiveWt;
@@ -302,12 +302,12 @@ const ConstructionProgressPage = () => {
       if (!useCostWeightage) {
         const subTotal = cat.activities.reduce((sum, act) => {
           const actData = catData[act.id] || {};
-          const actWt = parseFloat(actData._custom_weightage) !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
+          const actWt = actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
             ? parseFloat(actData._custom_weightage)
             : act.weightage;
           return sum + actWt;
         }, 0);
-        const baseWt = parseFloat(catData._custom_base_weightage) !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
+        const baseWt = catData._custom_base_weightage !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
           ? parseFloat(catData._custom_base_weightage)
           : cat.total_weightage;
         if (Math.abs(subTotal - baseWt) > 0.05) {
@@ -319,7 +319,7 @@ const ConstructionProgressPage = () => {
     // Global validation: sum of all category base weightages should equal 100%
     const globalSum = template.tower_construction.categories.reduce((sum, cat) => {
       const catData = towerActivities[cat.id] || {};
-      const baseWt = parseFloat(catData._custom_base_weightage) !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
+      const baseWt = catData._custom_base_weightage !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
         ? parseFloat(catData._custom_base_weightage)
         : cat.total_weightage;
       return sum + baseWt;
