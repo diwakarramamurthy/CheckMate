@@ -21,7 +21,7 @@ services:
     name: checkmate-frontend
     runtime: static
     rootDir: frontend
-    buildCommand: yarn install && yarn build
+        buildCommand: yarn install --no-frozen-lockfile && yarn build
     staticPublishPath: build
     envVars:
       - key: REACT_APP_BACKEND_URL
