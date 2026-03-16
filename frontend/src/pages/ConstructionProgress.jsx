@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Building2, Plus, Pencil, Trash2, Download, ChevronRight, AlertCircle, CheckCircle2,
   Loader2, RefreshCw, Eye, ChevronDown, MapPin, TrendingUp, Users, IndianRupee, Building,
-  FileSpreadsheet, ClipboardList, FileText, Upload, X, Menu
+  FileSpreadsheet, ClipboardList, FileText, Upload, X, Menu, Settings
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,12 @@ const ConstructionProgressPage = () => {
   const [overallCompletion, setOverallCompletion] = useState(0);
   const [infraOverallCompletion, setInfraOverallCompletion] = useState(0);
   const [weightageWarnings, setWeightageWarnings] = useState({ categories: {}, globalTotal: null });
+
+  // Edit Weightages state
+  const [weightageModalOpen, setWeightageModalOpen] = useState(false);
+  const [draftWeightages, setDraftWeightages] = useState({ category_base_weightages: {}, activity_weightages: {} });
+  const [savingWeightages, setSavingWeightages] = useState(false);
+  const [buildingWeightageProfile, setBuildingWeightageProfile] = useState({ category_base_weightages: {}, activity_weightages: {} });
 
   // Actual Site Expenditure state
   const [actualSiteExpenditure, setActualSiteExpenditure] = useState({
@@ -87,6 +93,14 @@ const ConstructionProgressPage = () => {
     }
   }, [towerActivities, infraActivities, template]);
 
+  useEffect(() => {
+    if (selectedBuilding && template) {
+      fetchBuildingWeightages(selectedBuilding).then(profile => {
+        applyWeightageProfile(profile);
+      });
+    }
+  }, [selectedBuilding, template]);
+
   const fetchProjects = async () => {
     const res = await axios.get(`${API}/projects`);
     setProjects(res.data);
@@ -97,6 +111,18 @@ const ConstructionProgressPage = () => {
     const res = await axios.get(`${API}/buildings?project_id=${selectedProject}`);
     setBuildings(res.data);
     if (res.data.length > 0) setSelectedBuilding(res.data[0].building_id);
+  };
+
+  const fetchBuildingWeightages = async (buildingId) => {
+    try {
+      const res = await axios.get(`${API}/buildings/${buildingId}/weightages`);
+      const profile = res.data || { category_base_weightages: {}, activity_weightages: {} };
+      setBuildingWeightageProfile(profile);
+      return profile;
+    } catch (err) {
+      setBuildingWeightageProfile({ category_base_weightages: {}, activity_weightages: {} });
+      return { category_base_weightages: {}, activity_weightages: {} };
+    }
   };
 
   const fetchActualSiteExpenditure = async () => {
@@ -385,6 +411,75 @@ const ConstructionProgressPage = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveBuildingWeightages = async () => {
+    setSavingWeightages(true);
+    try {
+      // Validate: all category bases must sum to ~100
+      const catSum = Object.values(draftWeightages.category_base_weightages)
+        .reduce((s, v) => s + (parseFloat(v) || 0), 0);
+      if (Math.abs(catSum - 100) > 0.1) {
+        toast.error(`Category base weightages sum to ${catSum.toFixed(2)}% — must equal 100%`);
+        setSavingWeightages(false);
+        return;
+      }
+      await axios.put(`${API}/buildings/${selectedBuilding}/weightages`, draftWeightages);
+      setBuildingWeightageProfile({ ...draftWeightages });
+      // Apply the new profile to current towerActivities
+      applyWeightageProfile({ ...draftWeightages });
+      toast.success("Weightage profile saved for this building");
+      setWeightageModalOpen(false);
+    } catch (err) {
+      toast.error("Failed to save weightage profile");
+    } finally {
+      setSavingWeightages(false);
+    }
+  };
+
+  const applyWeightageProfile = (profile) => {
+    if (!template) return;
+    setTowerActivities(prev => {
+      const next = { ...prev };
+      template.tower_construction.categories.forEach(cat => {
+        const catOverride = profile.category_base_weightages?.[cat.id];
+        const actOverrides = profile.activity_weightages?.[cat.id] || {};
+        next[cat.id] = { ...next[cat.id] };
+        if (catOverride !== undefined && catOverride !== null && catOverride !== "") {
+          next[cat.id]._custom_base_weightage = String(catOverride);
+        }
+        cat.activities.forEach(act => {
+          const actOverride = actOverrides[act.id];
+          next[cat.id][act.id] = { ...next[cat.id][act.id] };
+          if (actOverride !== undefined && actOverride !== null && actOverride !== "") {
+            next[cat.id][act.id]._custom_weightage = String(actOverride);
+          }
+        });
+      });
+      return next;
+    });
+  };
+
+  const openWeightageModal = () => {
+    if (!template) return;
+    // Pre-populate draft with current effective values (custom overrides or template defaults)
+    const catBases = {};
+    const actWts = {};
+    template.tower_construction.categories.forEach(cat => {
+      const catData = towerActivities[cat.id] || {};
+      catBases[cat.id] = catData._custom_base_weightage !== undefined && catData._custom_base_weightage !== null && catData._custom_base_weightage !== ""
+        ? catData._custom_base_weightage
+        : cat.total_weightage;
+      actWts[cat.id] = {};
+      cat.activities.forEach(act => {
+        const actData = catData[act.id] || {};
+        actWts[cat.id][act.id] = actData._custom_weightage !== undefined && actData._custom_weightage !== null && actData._custom_weightage !== ""
+          ? actData._custom_weightage
+          : act.weightage;
+      });
+    });
+    setDraftWeightages({ category_base_weightages: catBases, activity_weightages: actWts });
+    setWeightageModalOpen(true);
   };
 
   const getCompletionColor = (pct) => {
@@ -894,12 +989,149 @@ const ConstructionProgressPage = () => {
             <Button variant="outline" onClick={() => initializeActivities(template)}>
               Reset to Defaults
             </Button>
+            <Button
+              variant="outline"
+              onClick={openWeightageModal}
+              disabled={!selectedBuilding || !template}
+              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Edit Weightages
+            </Button>
             <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save Progress
             </Button>
           </div>
         )}
+
+        {/* Edit Weightages Modal */}
+        <Dialog open={weightageModalOpen} onOpenChange={setWeightageModalOpen}>
+          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-blue-600" />
+                Edit Weightages — {buildings.find(b => b.building_id === selectedBuilding)?.building_name || "Building"}
+              </DialogTitle>
+              <DialogDescription>
+                Customise the Base Weightage % for each main activity and the Wt.% for each sub-activity.
+                These values are saved at the building level and applied automatically every quarter.
+                All category base weightages must sum to 100%.
+              </DialogDescription>
+            </DialogHeader>
+
+            <ScrollArea className="flex-1 pr-4 overflow-y-auto">
+              <div className="space-y-4 py-2">
+                {/* Global sum indicator */}
+                {(() => {
+                  const total = template?.tower_construction?.categories?.reduce((sum, cat) => {
+                    const val = parseFloat(draftWeightages.category_base_weightages?.[cat.id]) || 0;
+                    return sum + val;
+                  }, 0) || 0;
+                  const isOk = Math.abs(total - 100) <= 0.1;
+                  return (
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium ${isOk ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                      <span>Total of all Base Weightages</span>
+                      <span>{total.toFixed(2)}% {isOk ? '✓' : `— must equal 100%`}</span>
+                    </div>
+                  );
+                })()}
+
+                {template?.tower_construction?.categories?.map((cat) => {
+                  const catBase = parseFloat(draftWeightages.category_base_weightages?.[cat.id]) || 0;
+                  const actSum = cat.activities.reduce((s, act) => {
+                    return s + (parseFloat(draftWeightages.activity_weightages?.[cat.id]?.[act.id]) || 0);
+                  }, 0);
+                  const actSumOk = Math.abs(actSum - catBase) <= 0.05;
+
+                  return (
+                    <div key={cat.id} className="border rounded-lg overflow-hidden">
+                      {/* Category header */}
+                      <div className={`flex items-center justify-between px-4 py-2 ${actSumOk ? 'bg-slate-50' : 'bg-amber-50'}`}>
+                        <span className="font-semibold text-slate-800 text-sm">{cat.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">Base Weightage %:</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={draftWeightages.category_base_weightages?.[cat.id] ?? cat.total_weightage}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setDraftWeightages(prev => ({
+                                ...prev,
+                                category_base_weightages: { ...prev.category_base_weightages, [cat.id]: val }
+                              }));
+                            }}
+                            className="w-20 h-7 text-center text-sm rounded border border-blue-300 bg-white px-1 font-semibold text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          />
+                          <span className="text-xs text-slate-500">%</span>
+                          {!actSumOk && (
+                            <span className="text-xs text-amber-600 font-medium">
+                              ⚠ sub-acts sum: {actSum.toFixed(2)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Activity rows */}
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-100 text-xs text-slate-500">
+                          <tr>
+                            <th className="text-left px-4 py-1.5">Activity</th>
+                            <th className="text-center px-4 py-1.5 w-32">Wt. %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cat.activities.map((act, idx) => (
+                            <tr key={act.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                              <td className="px-4 py-1.5 text-slate-700">{idx + 1}. {act.name}</td>
+                              <td className="px-4 py-1.5 text-center">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={draftWeightages.activity_weightages?.[cat.id]?.[act.id] ?? act.weightage}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setDraftWeightages(prev => ({
+                                      ...prev,
+                                      activity_weightages: {
+                                        ...prev.activity_weightages,
+                                        [cat.id]: {
+                                          ...(prev.activity_weightages?.[cat.id] || {}),
+                                          [act.id]: val
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                  className="w-20 text-center h-7 rounded border border-blue-300 bg-white px-1 text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400 mx-auto block"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+
+            <DialogFooter className="mt-4 gap-2">
+              <Button variant="outline" onClick={() => setWeightageModalOpen(false)}>Cancel</Button>
+              <Button
+                onClick={saveBuildingWeightages}
+                disabled={savingWeightages}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {savingWeightages ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save Weightage Profile
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from datetime import datetime, timezone
+from typing import Dict, Any
 import uuid
 from typing import List, Dict, Any
 
@@ -178,3 +179,73 @@ async def delete_building(building_id: str, current_user: dict = Depends(get_cur
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Building not found")
     return {"message": "Building deleted"}
+
+
+# =========================
+# WEIGHTAGE PROFILE ROUTES
+# =========================
+
+@router.get("/buildings/{building_id}/weightages")
+async def get_building_weightages(
+    building_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get saved weightage overrides for a building.
+    Returns custom profile if one has been saved, otherwise returns an empty object
+    (the frontend falls back to template defaults when the profile is empty).
+    """
+    building = await db.buildings.find_one({"building_id": building_id})
+    if not building:
+        raise HTTPException(status_code=404, detail="Building not found")
+
+    profile = await db.building_weightages.find_one(
+        {"building_id": building_id}, {"_id": 0}
+    )
+    if not profile:
+        return {
+            "building_id": building_id,
+            "category_base_weightages": {},
+            "activity_weightages": {},
+            "updated_at": None
+        }
+    return profile
+
+
+@router.put("/buildings/{building_id}/weightages")
+async def save_building_weightages(
+    building_id: str,
+    payload: Dict[str, Any],
+    current_user: dict = Depends(get_current_user)
+):
+    """Save custom weightage overrides for a building.
+
+    Expected payload:
+    {
+        "category_base_weightages": { "<cat_id>": <float>, ... },
+        "activity_weightages":      { "<cat_id>": { "<act_id>": <float>, ... }, ... }
+    }
+
+    These overrides are applied whenever the Construction Progress page loads
+    for this building (across all quarters), so the user only needs to set them once.
+    Per-quarter overrides saved inside tower_activities still take precedence.
+    """
+    building = await db.buildings.find_one({"building_id": building_id})
+    if not building:
+        raise HTTPException(status_code=404, detail="Building not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "building_id": building_id,
+        "project_id": building["project_id"],
+        "category_base_weightages": payload.get("category_base_weightages", {}),
+        "activity_weightages": payload.get("activity_weightages", {}),
+        "updated_at": now,
+        "updated_by": current_user.get("user_id", "unknown")
+    }
+
+    await db.building_weightages.update_one(
+        {"building_id": building_id},
+        {"$set": doc},
+        upsert=True
+    )
+    return doc
