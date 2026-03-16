@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Building2, Plus, Pencil, Trash2, Download, ChevronRight, AlertCircle, CheckCircle2,
   Loader2, RefreshCw, Eye, ChevronDown, MapPin, TrendingUp, Users, IndianRupee, Building,
-  FileSpreadsheet, ClipboardList, FileText, Upload, X, Menu
+  FileSpreadsheet, ClipboardList, FileText, Upload, X, Menu, FolderKanban
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
