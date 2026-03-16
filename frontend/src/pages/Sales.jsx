@@ -96,14 +96,18 @@ const SalesPage = () => {
     }
   };
 
-  const deleteSale = async (id) => {
-    if (!window.confirm("Delete this sale record?")) return;
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
+  const confirmDeleteSale = async () => {
+    if (!deleteConfirmId) return;
     try {
-      await axios.delete(`${API}/unit-sales/${id}`);
+      await axios.delete(`${API}/unit-sales/${deleteConfirmId}`);
       toast.success("Sale deleted");
       fetchSales();
     } catch (err) {
       toast.error("Failed to delete sale");
+    } finally {
+      setDeleteConfirmId(null);
     }
   };
 
@@ -312,7 +316,7 @@ const SalesPage = () => {
                         <Button variant="ghost" size="icon" onClick={() => { setEditingSale(sale); setForm(sale); setDialogOpen(true); }}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteSale(sale.sale_id)}>
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteConfirmId(sale.sale_id)}>
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </TableCell>
@@ -324,6 +328,24 @@ const SalesPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Sale Record</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this sale record? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteSale} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

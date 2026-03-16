@@ -39,6 +39,13 @@ const ReportsPage = () => {
   const [downloadingDocx, setDownloadingDocx] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewPdfUrl, setPreviewPdfUrl] = useState("");
+
+  // Cleanup blob URL on unmount or when it changes (prevents memory leaks)
+  useEffect(() => {
+    return () => {
+      if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+    };
+  }, [previewPdfUrl]);
   const [previewType, setPreviewType] = useState("html"); // "html" | "pdf"
   const [previewTitle, setPreviewTitle] = useState("Report Preview");
   const [previewReportType, setPreviewReportType] = useState("");
@@ -89,8 +96,6 @@ const ReportsPage = () => {
           `${API}/generate-pdf/${selectedProject}/${reportType}?quarter=${quarter}&year=${year}`,
           { responseType: "blob" }
         );
-        // Revoke any previous blob URL to avoid memory leaks
-        if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
         const blobUrl = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
         setPreviewPdfUrl(blobUrl);
         setPreviewType("pdf");

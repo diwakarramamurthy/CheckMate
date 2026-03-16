@@ -97,6 +97,7 @@ const LandCostPage = () => {
       });
     } catch (err) {
       console.error("Failed to fetch land cost", err);
+      toast.error("Failed to load land cost data");
     } finally {
       setLoading(false);
     }

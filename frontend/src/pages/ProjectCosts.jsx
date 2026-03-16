@@ -113,9 +113,13 @@ const ProjectCostsPage = () => {
   }, [selectedProject, quarter, year]);
 
   const fetchProjects = async () => {
-    const res = await axios.get(`${API}/projects`);
-    setProjects(res.data);
-    if (res.data.length > 0) setSelectedProject(res.data[0].project_id);
+    try {
+      const res = await axios.get(`${API}/projects`);
+      setProjects(res.data);
+      if (res.data.length > 0) setSelectedProject(res.data[0].project_id);
+    } catch (err) {
+      toast.error("Failed to load projects");
+    }
   };
   
   const fetchLandCost = async () => {

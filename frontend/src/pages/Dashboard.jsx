@@ -138,8 +138,16 @@ const DashboardPage = () => {
                     <p className="text-sm text-slate-600 mb-1">{stat.label}</p>
                     <p className="text-xl font-bold text-slate-900 currency">{stat.value}</p>
                   </div>
-                  <div className={`p-2 rounded-lg bg-${stat.color}-50`}>
-                    <stat.icon className={`h-5 w-5 text-${stat.color}-600`} />
+                  <div className={({
+                      blue: "bg-blue-50", slate: "bg-slate-50", emerald: "bg-emerald-50",
+                      amber: "bg-amber-50", purple: "bg-purple-50", green: "bg-green-50",
+                      orange: "bg-orange-50", red: "bg-red-50"
+                    })[stat.color] + " p-2 rounded-lg"}>
+                    <stat.icon className={({
+                      blue: "text-blue-600", slate: "text-slate-600", emerald: "text-emerald-600",
+                      amber: "text-amber-600", purple: "text-purple-600", green: "text-green-600",
+                      orange: "text-orange-600", red: "text-red-600"
+                    })[stat.color] + " h-5 w-5"} />
                   </div>
                 </div>
               </CardContent>
