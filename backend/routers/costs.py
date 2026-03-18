@@ -341,6 +341,187 @@ async def _build_form4_data(
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# INFRASTRUCTURE COSTS ROUTES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Canonical list of infrastructure items with their RERA-defined weightages
+_INFRA_ITEMS = [
+    {"id": "road_footpath_storm_drain",    "name": "Road, Foot-path and storm water drain",            "weightage": 21.5},
+    {"id": "underground_sewage_network",   "name": "Underground sewage drainage network",               "weightage": 13.0},
+    {"id": "sewage_treatment_plant",       "name": "Sewage Treatment Plant",                            "weightage": 8.5},
+    {"id": "overhead_sump_reservoir",      "name": "Over-head and Sump water reservoir/Tank",           "weightage": 8.5},
+    {"id": "underground_water_distribution","name": "Under ground water distribution network",          "weightage": 10.5},
+    {"id": "electric_substation_cables",   "name": "Electric Substation & Under-ground electric cables","weightage": 10.5},
+    {"id": "street_lights",                "name": "Street Lights",                                     "weightage": 4.0},
+    {"id": "entry_gate",                   "name": "Entry Gate",                                        "weightage": 2.5},
+    {"id": "boundary_wall",                "name": "Boundary wall",                                     "weightage": 6.0},
+    {"id": "club_house",                   "name": "Club House",                                        "weightage": 7.0},
+    {"id": "swimming_pool",                "name": "Swimming Pool",                                     "weightage": 3.5},
+    {"id": "amphitheatre",                 "name": "Amphitheatre",                                      "weightage": 2.5},
+    {"id": "gardens_playground",           "name": "Gardens / Play Ground",                             "weightage": 2.0},
+]
+
+_INFRA_IDS = [item["id"] for item in _INFRA_ITEMS]
+
+
+@router.get("/infrastructure-costs/template")
+async def get_infrastructure_costs_template(current_user: dict = Depends(get_current_user)):
+    """Return the canonical list of infrastructure items with names and weightages."""
+    return {"items": _INFRA_ITEMS}
+
+
+@router.get("/infrastructure-costs/{project_id}")
+async def get_infrastructure_costs(
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch saved infrastructure cost entries for a project."""
+    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    doc = await db.infrastructure_costs.find_one({"project_id": project_id}, {"_id": 0})
+    if not doc:
+        return {"project_id": project_id, "costs": {}, "total_infrastructure_cost": 0}
+
+    # Build the costs dict from stored fields, supporting both old (named-field)
+    # and new (nested costs dict) storage formats.
+    stored_costs = doc.get("costs", None)
+    if stored_costs is None:
+        # Legacy format: each infra id is a top-level field in the document
+        stored_costs = {
+            item_id: doc.get(item_id, {"estimated_cost": 0, "is_applicable": True})
+            for item_id in _INFRA_IDS
+        }
+
+    return {
+        "project_id": project_id,
+        "costs": stored_costs,
+        "total_infrastructure_cost": doc.get("total_infrastructure_cost", 0),
+    }
+
+
+@router.post("/infrastructure-costs")
+async def save_infrastructure_costs(
+    project_id: str = Query(...),
+    body: dict = None,
+    request: Request = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create or update infrastructure cost data for a project.
+
+    Body is a flat dict keyed by infrastructure item id:
+      { "road_footpath_storm_drain": { "estimated_cost": 150000, "is_applicable": true }, ... }
+    """
+    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Accept body either as a passed dict or parsed from request JSON
+    if body is None and request is not None:
+        body = await request.json()
+    if body is None:
+        body = {}
+
+    # Sanitise and compute total (only applicable items)
+    costs: Dict[str, Any] = {}
+    total = 0.0
+    for item_id in _INFRA_IDS:
+        raw = body.get(item_id, {})
+        est_cost    = float(raw.get("estimated_cost", 0) or 0)
+        is_applicable = raw.get("is_applicable", True)
+        if is_applicable is None:
+            is_applicable = True
+        costs[item_id] = {"estimated_cost": est_cost, "is_applicable": bool(is_applicable)}
+        if is_applicable:
+            total += est_cost
+
+    doc = {
+        "project_id": project_id,
+        "costs": costs,
+        "total_infrastructure_cost": round(total, 2),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    await db.infrastructure_costs.update_one(
+        {"project_id": project_id},
+        {"$set": doc},
+        upsert=True
+    )
+
+    return doc
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LAND COST ROUTES
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/land-cost/{project_id}")
+async def get_land_cost(
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch land cost data (estimated + actual) for a project."""
+    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    doc = await db.land_costs.find_one({"project_id": project_id}, {"_id": 0})
+    if not doc:
+        # Return empty structure when no data exists yet
+        empty = {
+            "land_cost": 0, "premium_cost": 0, "tdr_cost": 0, "statutory_cost": 0,
+            "land_premium": 0, "under_rehab_scheme": 0, "estimated_rehab_cost": 0,
+            "actual_rehab_cost": 0, "land_clearance_cost": 0, "asr_linked_premium": 0,
+            "total": 0
+        }
+        return {"project_id": project_id, "estimated": empty, "actual": empty}
+
+    return doc
+
+
+@router.post("/land-cost/{project_id}")
+async def save_land_cost(
+    project_id: str,
+    body: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create or update land cost data for a project."""
+    project = await db.projects.find_one({"project_id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    cost_fields = [
+        "land_cost", "premium_cost", "tdr_cost", "statutory_cost",
+        "land_premium", "under_rehab_scheme", "estimated_rehab_cost",
+        "actual_rehab_cost", "land_clearance_cost", "asr_linked_premium"
+    ]
+
+    def _clean(section: dict) -> dict:
+        cleaned = {f: float(section.get(f) or 0) for f in cost_fields}
+        cleaned["total"] = sum(cleaned[f] for f in cost_fields)
+        return cleaned
+
+    estimated = _clean(body.get("estimated", {}))
+    actual = _clean(body.get("actual", {}))
+
+    doc = {
+        "project_id": project_id,
+        "estimated": estimated,
+        "actual": actual,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    await db.land_costs.update_one(
+        {"project_id": project_id},
+        {"$set": doc},
+        upsert=True
+    )
+
+    return doc
+
+
 @router.get("/project-costs/live-summary/{project_id}")
 async def get_project_cost_live_summary(
     project_id: str, current_user: dict = Depends(get_current_user)

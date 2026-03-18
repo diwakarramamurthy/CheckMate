@@ -243,21 +243,21 @@ async def get_detailed_construction_template():
             ]
         },
         "infrastructure_works": {
-            "total_weightage": 0,
+            "total_weightage": 100,
             "activities": [
-                {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 0},
-                {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 0},
-                {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 0},
-                {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 0},
-                {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 0},
-                {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 0},
-                {"id": "street_lights", "name": "Street Lights", "weightage": 0},
-                {"id": "entry_gate", "name": "Entry Gate", "weightage": 0},
-                {"id": "boundary_wall", "name": "Boundary wall", "weightage": 0},
-                {"id": "club_house", "name": "Club House", "weightage": 0},
-                {"id": "swimming_pool", "name": "Swimming Pool", "weightage": 0},
-                {"id": "amphitheatre", "name": "Amphitheatre", "weightage": 0},
-                {"id": "gardens_playground", "name": "Gardens / Play Ground", "weightage": 0}
+                {"id": "road_footpath_storm_drain",     "name": "Road, Foot-path and storm water drain",             "weightage": 21.5},
+                {"id": "underground_sewage_network",    "name": "Underground sewage drainage network",                "weightage": 13.0},
+                {"id": "sewage_treatment_plant",        "name": "Sewage Treatment Plant",                             "weightage": 8.5},
+                {"id": "overhead_sump_reservoir",       "name": "Over-head and Sump water reservoir/Tank",            "weightage": 8.5},
+                {"id": "underground_water_distribution","name": "Under ground water distribution network",            "weightage": 10.5},
+                {"id": "electric_substation_cables",    "name": "Electric Substation & Under-ground electric cables", "weightage": 10.5},
+                {"id": "street_lights",                 "name": "Street Lights",                                      "weightage": 4.0},
+                {"id": "entry_gate",                    "name": "Entry Gate",                                         "weightage": 2.5},
+                {"id": "boundary_wall",                 "name": "Boundary wall",                                      "weightage": 6.0},
+                {"id": "club_house",                    "name": "Club House",                                         "weightage": 7.0},
+                {"id": "swimming_pool",                 "name": "Swimming Pool",                                      "weightage": 3.5},
+                {"id": "amphitheatre",                  "name": "Amphitheatre",                                       "weightage": 2.5},
+                {"id": "gardens_playground",            "name": "Gardens / Play Ground",                              "weightage": 2.0}
             ]
         }
     }
@@ -406,19 +406,19 @@ async def create_detailed_construction_progress(
 # =========================
 
 INFRASTRUCTURE_TEMPLATE = [
-    {"id": "road_footpath_storm_drain", "name": "Road, Foot-path and storm water drain", "weightage": 0},
-    {"id": "underground_sewage_network", "name": "Underground sewage drainage network", "weightage": 0},
-    {"id": "sewage_treatment_plant", "name": "Sewage Treatment Plant", "weightage": 0},
-    {"id": "overhead_sump_reservoir", "name": "Over-head and Sump water reservoir/Tank", "weightage": 0},
-    {"id": "underground_water_distribution", "name": "Under ground water distribution network", "weightage": 0},
-    {"id": "electric_substation_cables", "name": "Electric Substation & Under-ground electric cables", "weightage": 0},
-    {"id": "street_lights", "name": "Street Lights", "weightage": 0},
-    {"id": "entry_gate", "name": "Entry Gate", "weightage": 0},
-    {"id": "boundary_wall", "name": "Boundary wall", "weightage": 0},
-    {"id": "club_house", "name": "Club House", "weightage": 0},
-    {"id": "swimming_pool", "name": "Swimming Pool", "weightage": 0},
-    {"id": "amphitheatre", "name": "Amphitheatre", "weightage": 0},
-    {"id": "gardens_playground", "name": "Gardens / Play Ground", "weightage": 0},
+    {"id": "road_footpath_storm_drain",     "name": "Road, Foot-path and storm water drain",             "weightage": 21.5},
+    {"id": "underground_sewage_network",    "name": "Underground sewage drainage network",                "weightage": 13.0},
+    {"id": "sewage_treatment_plant",        "name": "Sewage Treatment Plant",                             "weightage": 8.5},
+    {"id": "overhead_sump_reservoir",       "name": "Over-head and Sump water reservoir/Tank",            "weightage": 8.5},
+    {"id": "underground_water_distribution","name": "Under ground water distribution network",            "weightage": 10.5},
+    {"id": "electric_substation_cables",    "name": "Electric Substation & Under-ground electric cables", "weightage": 10.5},
+    {"id": "street_lights",                 "name": "Street Lights",                                      "weightage": 4.0},
+    {"id": "entry_gate",                    "name": "Entry Gate",                                         "weightage": 2.5},
+    {"id": "boundary_wall",                 "name": "Boundary wall",                                      "weightage": 6.0},
+    {"id": "club_house",                    "name": "Club House",                                         "weightage": 7.0},
+    {"id": "swimming_pool",                 "name": "Swimming Pool",                                      "weightage": 3.5},
+    {"id": "amphitheatre",                  "name": "Amphitheatre",                                       "weightage": 2.5},
+    {"id": "gardens_playground",            "name": "Gardens / Play Ground",                              "weightage": 2.0},
 ]
 
 

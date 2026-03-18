@@ -63,6 +63,7 @@ const DashboardPage = () => {
       setDashboard(res.data);
     } catch (err) {
       console.error(err);
+      toast.error(err?.response?.data?.detail || "Failed to load dashboard data");
     }
   };
 
