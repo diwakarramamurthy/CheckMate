@@ -11,7 +11,8 @@ from database import db
 from models import (
     ProjectCostBase, ProjectCostCreate, ProjectCostResponse,
     BuildingCostBase, BuildingCostCreate, BuildingCostResponse,
-    InfrastructureCostCreate, EstimatedDevelopmentCostCreate
+    InfrastructureCostCreate, EstimatedDevelopmentCostCreate,
+    UnitSaleCreate, UnitSaleResponse
 )
 from auth import get_current_user
 
